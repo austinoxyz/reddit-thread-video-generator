@@ -13,27 +13,30 @@ import codecs
 from gtts import gTTS
 from pydub import AudioSegment
 import subprocess
+from PIL import Image, ImageDraw, ImageFont
 
 _cwd = "/home/anon/Videos/automate-yt/"
 
 # OpenCV Image configuration parameters
 height, width = 1080, 1920
 fps = 30
+background_color = (255, 255, 255)
 
-title_font = cv2.FONT_HERSHEY_COMPLEX
-title_font_scale = 3
-title_thickness = 5
+title_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
+title_font_size = 92
+title_font = ImageFont.truetype(title_font_path, title_font_size)
 
-content_font = cv2.FONT_HERSHEY_SIMPLEX
-content_font_scale = 2
-content_thickness = 1
-
-line_type = cv2.LINE_AA
+content_font_path = os.path.join("/usr/share/fonts/truetype", "dejavu/DejaVuSerif.ttf")
+content_font_size = 48
+content_font = ImageFont.truetype(content_font_path, content_font_size)
 
 video_name         = 'video.mp4'
 title_audio_name   = 'title.mp3'
 audio_name         = 'post_audio.mp3'
 final_video_name   = 'final.mp4'
+
+# for syncing each audio file to its respective frame
+magic_constant = 1.049
 
 acronym_map = {
     'AITA': 'am i the asshole', 'aita': 'am i the asshole',
@@ -66,13 +69,17 @@ def load_posts(subreddit_name):
     with codecs.open('posts.json', 'w', 'utf-8') as json_file:
         json.dump(post_data, json_file)
 
-def wrap_text(text, width, font, font_scale, thickness):
-    (text_width, text_height), _ = cv2.getTextSize(text, font, font_scale, thickness)
+def get_text_size(font, text):
+    bbox = font.getbbox(text)
+    return (bbox[2] - bbox[0], bbox[3] - bbox[1])
+
+def wrap_text(text, max_width, font):
     wrapped_text = []
-    line = ""
+    line = ''
     for word in text.split(' '):
-        if cv2.getTextSize(line + " " + word, font, font_scale, thickness)[0][0] < (width-60):
-            line += " " + word
+        text_width, text_height = get_text_size(font, line + ' ' + word)
+        if text_width < max_width:
+            line += ' ' + word
         else:
             wrapped_text.append(line)
             line = word
@@ -80,7 +87,7 @@ def wrap_text(text, width, font, font_scale, thickness):
     return wrapped_text
 
 def get_sentence_pairs(content):
-    content_sentences = [s + '.  ' for s in re.split("[!?.]", content) if len(s) > 0]
+    content_sentences = [s + '. ' for s in re.split("[!?.]", content) if len(s) > 0]
     return [content_sentences[i:i+2] for i in range(0, len(content_sentences), 2)]
 
 def replace_acronyms(text):
@@ -104,25 +111,24 @@ def cleanup_text_for_audio(text):
     text = text.replace('’', '\'') # why reddit???
     return text
 
-def create_image(text, font, font_scale, thickness):
+def create_image(text, font):
     text = cleanup_text_for_video(text)
-    img = np.full((height, width, 3), (255, 255, 255), np.uint8)
-    text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
+    img = Image.new("RGB", (width, height), background_color)
+    draw = ImageDraw.Draw(img)
+    text_width, text_height = get_text_size(font, text)
 
-    if text_size[0] > width:
-        lines = wrap_text(text, width, font, font_scale, thickness)
+    if text_width > width:
+        lines = wrap_text(text, width * 0.68, font)
     else:
         lines = [text]
     
     y = int(height * 0.1)
     for line in lines:
-        # TODO replace this call with a PIL ImageDraw call so a custom .ttf font can be used
-        text_width, text_height = cv2.getTextSize(line, font, font_scale, thickness)[0]
-        x = int((width - text_width) / 2)
-        line.encode('utf-8')
-        cv2.putText(img, line, (x, y), font, font_scale, (0, 0, 255), thickness=1, lineType=line_type)
-        y += text_height + 10
-    return img
+        line_width, line_height = get_text_size(font, line)
+        y += line_height + 10
+        x = int((width - line_width) / 2)
+        draw.text((x, y), line, fill=(0, 0, 0), font=font)
+    return np.array(img)
 
 def create_content_images(content):
     content = cleanup_text_for_video(content)
@@ -130,12 +136,12 @@ def create_content_images(content):
     content_images = []
     for sentence_pair in sentence_pairs:
         text = ''.join(sentence_pair)
-        content_images.append(create_image(text, content_font, content_font_scale, content_thickness))
+        content_images.append(create_image(text, content_font))
     return content_images
 
 def create_post_images(title, content):
+    title_image    = create_image(title, title_font)
     content_images = create_content_images(content)
-    title_image    = create_image(title, title_font, title_font_scale, title_thickness)
     return [title_image] + content_images
 
 def create_audio_file(text, file_name):
@@ -186,9 +192,10 @@ def create_video(post):
     durations = create_audio_files(title, content)
 
     for img, duration in list(zip(images, durations)):
-        for _ in range(int(fps * duration * 1.036)):
+        for _ in range(int(fps * duration * magic_constant)):
             out.write(img)
     out.release()
+    cv2.destroyAllWindows()
 
     subprocess.run(f"ffmpeg -i {video_name} -i {audio_name} -c copy -map 0:v:0 -map 1:a:0 {final_video_name}", shell=True, cwd=_cwd, timeout=120)
 
