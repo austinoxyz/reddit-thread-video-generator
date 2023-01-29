@@ -1,7 +1,5 @@
 # automate-youtube.py
 
-# THIS IS THE CHANGE
-
 import praw
 import json
 import cv2
@@ -150,7 +148,7 @@ def create_video(post):
     durations = create_audio_files(title, content)
 
     for img, duration in list(zip(images, durations)):
-        for _ in range(int(fps * duration)):
+        for _ in range(int(fps * duration * 1.055)):
             out.write(img)
     out.release()
 
