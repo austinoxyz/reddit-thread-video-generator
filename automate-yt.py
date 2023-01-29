@@ -45,12 +45,12 @@ def load_posts(subreddit_name):
     with open('posts.json', 'w') as json_file:
         json.dump(post_data, json_file)
 
-def wrap_text(text, width, font, font_scale, line_type, thickness):
-    (text_width, text_height), _ = cv2.getTextSize(text, font, font_scale, line_type)
+def wrap_text(text, width, font, font_scale, thickness):
+    (text_width, text_height), _ = cv2.getTextSize(text, font, font_scale, thickness)
     wrapped_text = []
     line = ""
     for word in text.split(' '):
-        if cv2.getTextSize(line + " " + word, font, font_scale, line_type, thickness)[0][0] < (width-60):
+        if cv2.getTextSize(line + " " + word, font, font_scale, thickness)[0][0] < (width-60):
             line += " " + word
         else:
             wrapped_text.append(line)
@@ -63,15 +63,15 @@ def create_post_images(title, content):
 
 def create_title_image(title):
     img = np.full((height, width, 3), (255, 255, 255), np.uint8)
-    text_size, _ = cv2.getTextSize(title, font, font_scale, line_type, thickness)
+    text_size, _ = cv2.getTextSize(title, font, font_scale, thickness)
     if text_size[0] > width:
-        lines = wrap_text(title, width, font, font_scale, line_type)
+        lines = wrap_text(title, width, font, font_scale, thickness)
     else:
         lines = [title]
     
     y = int(height * 0.1)
     for line in lines:
-        text_width, text_height = cv2.getTextSize(line, font, font_scale, line_type, thickness)[0]
+        text_width, text_height = cv2.getTextSize(line, font, font_scale, thickness)[0]
         x = int((width - text_width) / 2)
         cv2.putText(img, line, (x, y), font, font_scale, (0, 0, 255), thickness=1, lineType=line_type)
         y += text_height + 10
@@ -87,65 +87,81 @@ def create_content_images(content):
 
 def create_content_image(sentences):
     img = np.full((height, width, 3), (255, 255, 255), np.uint8)
-    text = sentences.join('\n')
-    text_size, _ = cv2.getTextSize(text, font, font_scale, line_type, thickness)
+    text = '\n'.join(sentences)
+    text_size, _ = cv2.getTextSize(text, font, font_scale, thickness)
     if text_size[0] > width:
-        lines = wrap_text(text, width, font, font_scale, line_type, thickness)
+        lines = wrap_text(text, width, font, font_scale, thickness)
     else:
         lines = [text]
 
     y = int(height * 0.1)
     for line in lines:
-        text_width, text_height = cv2.getTextSize(line, font, font_scale, line_type, thickness)[0]
+        text_width, text_height = cv2.getTextSize(line, font, font_scale, thickness)[0]
         x = int((width - text_width) / 2)
         cv2.putText(img, line, (x, y), font, font_scale, (0, 0, 255), thickness=thickness, lineType=line_type)
         y += text_height + 10
     return img
 
 def create_audio_files(title, content):
-    return [create_title_audio(title)] + create_content_audio(content)
+    durations = [create_title_audio(title)] + create_content_audio(content)
+
+    content_audio_file_names = [os.path.join(_cwd, 'content' + str(i + 1) + '.mp3') 
+                                for i in range(len(durations) - 1)]
+    audio_file_names = [os.path.join(_cwd, title_audio_name)] + content_audio_file_names
+    audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
+    for file_name in audio_file_names[1:]:
+        audio += AudioSegment.from_file(file_name, format='mp3')
+    audio.export(os.path.join(_cwd, audio_name))
+
+    return durations
 
 def create_title_audio(title):
     tts = gTTS(text=title, lang='en')
     tts.save(os.path.join(_cwd, title_audio_name))
     audio = AudioSegment.from_file(os.path.join(_cwd, title_audio_name), format='mp3')
-    return int(audio.duration_seconds)
+    duration = audio.duration_seconds
+    del audio
+    return int(duration)
 
 def create_content_audio(content):
     content_sentences = content.split(".")
     sentence_pairs = [content_sentences[i:i+2] for i in range(0, len(content_sentences), 2)]
     durations = []
     for n, sentence_pair in enumerate(sentence_pairs):
-        text = sentence_pair.join('\n')
+        text = '\n'.join(sentence_pair)
         tts = gTTS(text=text, lang='en')
-        file_name = 'content' + (n + 1) + '.mp3'
+        file_name = 'content' + str(n + 1) + '.mp3'
         tts.save(os.path.join(_cwd, file_name))
-        audio = AudioSegment.from_file(os.path.join(_cwd, 'content' + (n + 1) + '.mp3'), format='mp3')
+        audio = AudioSegment.from_file(os.path.join(_cwd, 'content' + str(n + 1) + '.mp3'), format='mp3')
         durations.append(int(audio.duration_seconds))
+        del audio
     return durations
 
 def create_video(post):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(os.path.join(_cwd, video_name), fourcc, fps, (width, height))
 
+    title = post['title']
+    content = post['content']
+
     images    = create_post_images(title, content)
     durations = create_audio_files(title, content)
 
-    for idx, img, duration in enumerate(list(zip(images, durations))):
+    for img, duration in list(zip(images, durations)):
         for _ in range(int(fps * duration)):
             out.write(img)
     out.release()
 
-    audio_files = [title_audio_name] + ['content' + (i + 1) '.mp3' for i in range(len(content_images))]
-    audio_files_str = audio_files.join('|')
-
-    subprocess.run(f"ffmpeg -i concat:{audio_files_str} -acodec pcm_s16le -ar 44100 {audio_name}", shell=True, cwd=_cwd, timeout=120)
     subprocess.run(f"ffmpeg -i {video_name} -i {audio_name} -c copy -map 0:v:0 -map 1:a:0 {final_video_name}", shell=True, cwd=_cwd, timeout=120)
 
+
 if __name__ == '__main__':
+
     #    load_posts('AmItheAsshole')
+
     with open('posts.json', 'r') as posts_file:
         posts = json.load(posts_file)
+
     create_video(posts[5])
 
 
