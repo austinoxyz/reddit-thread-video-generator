@@ -20,7 +20,7 @@ _cwd = "/home/anon/Videos/automate-yt/"
 height, width = 1080, 1920
 fps = 30
 
-title_font = cv2.FONT_HERSHEY_SIMPLEX
+title_font = cv2.FONT_HERSHEY_COMPLEX
 title_font_scale = 3
 title_thickness = 5
 
@@ -186,7 +186,7 @@ def create_video(post):
     durations = create_audio_files(title, content)
 
     for img, duration in list(zip(images, durations)):
-        for _ in range(int(fps * duration * 1.038)):
+        for _ in range(int(fps * duration * 1.036)):
             out.write(img)
     out.release()
 
