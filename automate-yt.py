@@ -19,7 +19,7 @@ _cwd = "/home/anon/Videos/automate-yt/"
 
 height, width = 1080, 1920
 fps = 30
-background_color = (255, 255, 255)
+background_color = (90, 90, 90)
 
 text_width_cutoff = width * 0.90
 text_start_x  = width - text_width_cutoff
@@ -30,10 +30,12 @@ text_start_y  = height - text_height_cutoff
 title_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
 title_font_size = 92
 title_font = ImageFont.truetype(title_font_path, title_font_size)
+title_font_color = (255, 255, 255)
 
 content_font_path = os.path.join("/usr/share/fonts/truetype", "dejavu/DejaVuSerif.ttf")
 content_font_size = 48
 content_font = ImageFont.truetype(content_font_path, content_font_size)
+content_font_color = (255, 255, 255)
 
 audio_file_names = []
 
@@ -47,16 +49,16 @@ magic_audio_constant = 1.083
 magic_spacing_constant = 35
 
 acronym_map = {
-    'AITA': 'am i the asshole', 'aita': 'am i the asshole',
-    'OP': 'oh pee', 'op': 'oh pee',
-    'IIRC': 'if i recall correctly', 'iirc': 'if i recall correctly',
-    'AFAIK': 'as far as i know', 'afaik': 'as far as i know',
-    'DAE': 'does anyone else', 'dae': 'does anyone else',
-    'ICYMI': 'in case you missed it', 'icymi': 'in case you missed it',
-    'tldr': 'too long didnt read', 'TL;DR': 'too long didnt read',
-    'TIL': 'today i learned', 'til': 'today i learned',
-    'IDK': 'i dont know', 'idk': 'i dont know',
-    'LPT': 'life pro tip', 'lpt': 'life pro tip',
+    'AITA': 'am i the asshole',        'aita': 'am i the asshole',
+    'OP': 'oh pee',                    'op': 'oh pee',
+    'IIRC': 'if i recall correctly',   'iirc': 'if i recall correctly',
+    'AFAIK': 'as far as i know',       'afaik': 'as far as i know',
+    'DAE': 'does anyone else',         'dae': 'does anyone else',
+    'ICYMI': 'in case you missed it',  'icymi': 'in case you missed it',
+    'tldr': 'too long didnt read',     'TL;DR': 'too long didnt read',
+    'TIL': 'today i learned',          'til': 'today i learned',
+    'IDK': 'i dont know',              'idk': 'i dont know',
+    'LPT': 'life pro tip',             'lpt': 'life pro tip',
 }
 
 def load_posts(subreddit_name):
@@ -125,7 +127,7 @@ def create_audio_file(text, file_name):
 
 
 
-def wrap_text(text, max_width, font, starting_x):
+def wrap_text(text, max_width, font, starting_x, bbox):
 
     wrapped_text = []
     line = ''
@@ -149,7 +151,7 @@ def wrap_text(text, max_width, font, starting_x):
 
 
 
-def write_text_to_image(text, font, font_height, img, pos):
+def write_text_to_image(text, font, font_height, color, img, pos):
     draw = ImageDraw.Draw(img)
     text_width, text_height = get_text_size(font, text)
 
@@ -169,9 +171,9 @@ def write_text_to_image(text, font, font_height, img, pos):
 
     for n, line in enumerate(lines):
         if n == 0:
-            draw.text((x, y), line, fill=(0, 0, 0), font=font)
+            draw.text((x, y), line, fill=color, font=font)
         else:
-            draw.text((text_start_x, y), line, fill=(0, 0, 0), font=font)
+            draw.text((text_start_x, y), line, fill=color, font=font)
         line_width, line_height = get_text_size(font, line)
         last_y = y
 
@@ -207,7 +209,7 @@ def create_slides(title, content):
 
 def create_title_slide(title):
     img = Image.new("RGB", (width, height), background_color)
-    img, _ = write_text_to_image(title, title_font, title_font_height, 
+    img, _ = write_text_to_image(title, title_font, title_font_height, title_font_color,
                                  img, pos=(0.2*width, 0.2*height))
     return np.array(img)
 
@@ -222,6 +224,7 @@ def create_content_slides(text):
         sentences = get_sentences(paragraph)
         for sentence in sentences:
             img, (x, y) = write_text_to_image(sentence, content_font, content_font_height, 
+                                              content_font_color,
                                               img, pos=(x, y))
             images.append(np.array(img))
 
