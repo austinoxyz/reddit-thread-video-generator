@@ -44,7 +44,6 @@ final_video_name   = 'final.mp4'
 
 # for syncing each audio file to its respective frame
 magic_audio_constant = 1.083
-magic_spacing_constant = 35
 
 acronym_map = {
     'AITA': 'am i the asshole', 'aita': 'am i the asshole',
@@ -81,8 +80,18 @@ def get_text_size(font, text):
     bbox = font.getbbox(text)
     return (bbox[2] - bbox[0], bbox[3] - bbox[1])
 
-title_font_height   = get_text_size(title_font, 'example_word')[1]
-content_font_height = get_text_size(content_font, 'example_word')[1]
+def wrap_text(text, max_width, font):
+    wrapped_text = []
+    line = ''
+    for word in text.split(' '):
+        text_width, text_height = get_text_size(font, line + ' ' + word)
+        if text_width < max_width:
+            line += ' ' + word
+        else:
+            wrapped_text.append(line)
+            line = word
+    wrapped_text.append(line)
+    return wrapped_text
 
 def get_paragraphs(content):
     return [s for s in re.split("(\n)+", content) if len(s) > 0]
@@ -116,6 +125,48 @@ def cleanup_text_for_audio(text):
     return text
 
 
+# video and audio functionality beneath this comment
+
+def create_image(text, font):
+    text = cleanup_text_for_video(text)
+    img = Image.new("RGB", (width, height), background_color)
+    draw = ImageDraw.Draw(img)
+    text_width, text_height = get_text_size(font, text)
+
+    if text_width > width:
+        lines = wrap_text(text, text_width_cutoff, font)
+    else:
+        lines = [text]
+    
+    y = int(height * 0.1)
+    for line in lines:
+        line_width, line_height = get_text_size(font, line)
+        y += line_height + 10
+        x = int((width - line_width) / 2)
+        draw.text((x, y), line, fill=(0, 0, 0), font=font)
+    return np.array(img)
+
+
+
+def create_content_images(content):
+    content = cleanup_text_for_video(content)
+    sentence_pairs = get_sentence_pairs(content)
+    content_images = []
+    for sentence_pair in sentence_pairs:
+        text = ''.join(sentence_pair)
+        content_images.append(create_image(text, content_font))
+    return content_images
+
+
+
+def create_post_images(title, content):
+    title   = cleanup_text_for_video(title)
+    content = cleanup_text_for_video(content)
+    title_image    = create_image(title, title_font)
+    content_images = create_content_images(content)
+    return [title_image] + content_images
+
+
 
 def create_audio_file(text, file_name):
     path = os.path.join(_cwd, file_name)
@@ -129,119 +180,26 @@ def create_audio_file(text, file_name):
 
 
 
-def wrap_text(text, max_width, font, starting_x):
-
-    wrapped_text = []
-    line = ''
-    have_processed_first_line = False
-    words = text.split(' ')
-
-    for word in words:
-        text_width, text_height = get_text_size(font, line + ' ' + word)
-        if starting_x + text_width < max_width:
-            line += ' ' + word
-        else:
-            if not have_processed_first_line:
-                have_processed_first_line = True
-                starting_x = text_start_x
-            wrapped_text.append(line)
-            line = word
-    wrapped_text.append(line)
-    return wrapped_text
-
-
-
-
-
-def write_text_to_image(text, font, font_height, img, pos):
-    draw = ImageDraw.Draw(img)
-    text_width, text_height = get_text_size(font, text)
-
-    if pos[0] + text_width > width:
-        lines = wrap_text(text, text_width_cutoff, font, pos[0])
-    else:
-        lines = [text]
-
-    x, y = pos
-    last_y = y
-
-    magic_spacing_constant2 = int(font_height * 0.8)
-    
-    if lines[0] == '':
-        x = text_start_x
-        y += font_height + magic_spacing_constant2
-
-    for n, line in enumerate(lines):
-        if n == 0:
-            draw.text((x, y), line, fill=(0, 0, 0), font=font)
-        else:
-            draw.text((text_start_x, y), line, fill=(0, 0, 0), font=font)
-        line_width, line_height = get_text_size(font, line)
-        last_y = y
-
-        y += font_height + magic_spacing_constant2
-        x = text_start_x + line_width
-    return img, (x, last_y)
-
-
-
 def create_content_audio_files(content):
-    paragraphs = get_paragraphs(content)
+    sentence_pairs = get_sentence_pairs(content)
     durations = []
-    n = 1
-    for paragraph in paragraphs:
-        sentences = get_sentences(paragraph)
-        for sentence in sentences:
-            file_name = 'audio' + str(n) + '.mp3'
-            durations.append(create_audio_file(sentence, file_name))
-            n += 1
+    for n, sentence_pair in enumerate(sentence_pairs):
+        text = ''.join(sentence_pair)
+        file_name = 'content' + str(n + 1) + '.mp3'
+        durations.append(create_audio_file(text, file_name))
     return durations
 
 
 
-def create_slides(title, content):
-    title_slide    = create_title_slide(title)
-    content_slides = create_content_slides(content)
-    return [title_slide] + content_slides
+def create_audio_files(title, content):
+    title_audio_duration = create_audio_file(title, 'title.mp3')
+    content_audio_durations = create_content_audio_files(content)
+    durations = [title_audio_duration] + content_audio_durations
 
-
-
-def create_title_slide(title):
-    img = Image.new("RGB", (width, height), background_color)
-    img, _ = write_text_to_image(title, title_font, title_font_height, 
-                                 img, pos=(0.2*width, 0.2*height))
-    return np.array(img)
-
-
-
-def create_content_slides(text):
-    x, y = (text_start_x, text_start_y)
-    img = Image.new("RGB", (width, height), background_color)
-    paragraphs = get_paragraphs(text)
-    images = []
-    for paragraph in paragraphs:
-        sentences = get_sentences(paragraph)
-        for sentence in sentences:
-            img, (x, y) = write_text_to_image(sentence, content_font, content_font_height, 
-                                              img, pos=(x, y))
-            images.append(np.array(img))
-
-            if x >= text_width_cutoff*0.8:
-                x, y = text_start_x, y + content_font_height + content_font_height * 0.8
-
-            if y >= text_height_cutoff*0.8:
-                img = Image.new("RGB", (width, height), background_color)
-                x, y = text_start_x, text_start_y
-    return images
-
-
-
-
-def create_audio(title, content):
-    durations = [create_audio_file(title, 'title.mp3')] + create_content_audio_files(content)
-    content_audio_file_names = [os.path.join(_cwd, 'audio' + str(i + 1) + '.mp3') 
+    content_audio_file_names = [os.path.join(_cwd, 'content' + str(i + 1) + '.mp3') 
                                 for i in range(len(durations) - 1)]
     audio_file_names = [os.path.join(_cwd, title_audio_name)] + content_audio_file_names
+
     audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
     for file_name in audio_file_names[1:]:
         audio += AudioSegment.from_file(file_name, format='mp3')
@@ -254,11 +212,14 @@ def create_video(post):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out = cv2.VideoWriter(os.path.join(_cwd, video_name), fourcc, fps, (width, height))
 
-    title   = strip_newlines(post['title']) 
-    content = strip_newlines(post['content'])   
-    
-    durations = create_audio(title, content)
-    images    = create_slides(title, content)
+    title = strip_newlines(post['title']) 
+    content = strip_newlines(post['content'])
+
+    print(title)
+    print(content)
+
+    images    = create_post_images(title, content)
+    durations = create_audio_files(title, content)
 
     for img, duration in list(zip(images, durations)):
         for _ in range(int(fps * duration * magic_audio_constant)):
@@ -266,14 +227,9 @@ def create_video(post):
 
     out.release()
     cv2.destroyAllWindows()
-
     subprocess.run(f"ffmpeg -i {video_name} -i {audio_name} -c copy -map 0:v:0 -map 1:a:0 {final_video_name}", shell=True, cwd=_cwd, timeout=120)
-
-
 
 if __name__ == '__main__':
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
     create_video(posts[5])
-
-
