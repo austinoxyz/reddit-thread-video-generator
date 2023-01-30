@@ -90,10 +90,6 @@ def get_paragraphs(content):
 def get_sentences(content):
     return [s + '. ' for s in re.split("[!?.]", content) if len(s) > 0]
 
-def get_sentence_pairs(content):
-    sentences = get_sentences(content)
-    return [sentences[i:i+2] for i in range(0, len(sentences), 2)]
-
 def replace_acronyms(text):
     words = re.findall(r'\b\w+\b', text)
     pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
@@ -185,6 +181,7 @@ def write_text_to_image(text, font, font_height, img, pos):
 
 
 
+
 def create_content_audio_files(content):
     paragraphs = get_paragraphs(content)
     durations = []
@@ -199,10 +196,12 @@ def create_content_audio_files(content):
 
 
 
+
 def create_slides(title, content):
     title_slide    = create_title_slide(title)
     content_slides = create_content_slides(content)
     return [title_slide] + content_slides
+
 
 
 
@@ -237,6 +236,7 @@ def create_content_slides(text):
 
 
 
+
 def create_audio(title, content):
     durations = [create_audio_file(title, 'title.mp3')] + create_content_audio_files(content)
     content_audio_file_names = [os.path.join(_cwd, 'audio' + str(i + 1) + '.mp3') 
@@ -247,6 +247,7 @@ def create_audio(title, content):
         audio += AudioSegment.from_file(file_name, format='mp3')
     audio.export(os.path.join(_cwd, audio_name))
     return durations
+
 
 
 
@@ -277,3 +278,30 @@ if __name__ == '__main__':
     create_video(posts[5])
 
 
+def draw_comment_sidebar_to_image(img, pos):
+    # comment sidebar contains: 
+    #       up-vote icons
+    #       line going southward that runs off the screen (for comment tree)
+    return False
+
+def draw_comment_header_to_image(img, pos, username, points, time_ago, medals):
+    # comment header contains: 
+    #       username
+    #       points
+    #       time posted ago
+    #       time edited ago (if applicable)
+    #       medals (if applicable)
+    return False
+
+def draw_comment_footer(img, pos):
+    # comment header contains: 
+    #       "Reply"
+    #       "Give Award"
+    #       "Share"
+    #       "Report"
+    #       "Save"
+    return False
+
+def write_comment_to_image(img, pos):
+    # TODO refactor 
+    return False
