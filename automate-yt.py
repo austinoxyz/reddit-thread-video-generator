@@ -1,29 +1,28 @@
 # automate-youtube.py
 
-import praw
-from praw.models import Redditor, Comment, MoreComments
-import json
-import cv2
-import numpy as np
-import uuid
 import os
 import re
 import time
+import datetime
 import textwrap
 import codecs
+
+import praw
+import json
+from praw.models import Redditor, Comment, MoreComments
 from gtts import gTTS
 from pydub import AudioSegment
-import subprocess
 from PIL import Image, ImageDraw, ImageFont
-
-_cwd = "/home/anon/Videos/automate-yt/"
+import numpy as np
+import cv2
+import subprocess
 
 height, width = 1080, 1920 
 aspect = float(width / height)
 fps = 30
 background_color = (90, 90, 90, 0)
 
-text_width_cutoff = width * 0.90
+text_width_cutoff = width * 0.96
 text_start_x  = width - text_width_cutoff
 
 text_height_cutoff = height * 0.90
@@ -38,18 +37,25 @@ content_font_size = 20
 content_font = ImageFont.truetype(content_font_path, content_font_size)
 content_font_color = (255, 255, 255)
 
-audio_file_names = []
+comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
+comment_font_size = 24
+comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
+comment_font_color = (255, 255, 255)
 
-video_name         = 'video.mp4'
-title_audio_name   = 'title.mp3'
-audio_name         = 'post_audio.mp3'
-final_video_name   = 'final.mp4'
+base_dir           = '/home/anon/Videos/automate-yt'
+temp_dir           = base_dir + '/tmp'
+video_name         = 'comment_video_no_audio.mp4'
+audio_name         = 'comment_audio.mp3'
+
+working_dir = base_dir + '/working'
+comment_video_name_base   = 'comment_final'
+
+final_video_name = 'final.mp4'
 
 # for syncing each audio file to its respective frame
 magic_audio_constant = 1.083
 
 acronym_map = {
-    'AITA': 'am i the asshole',        'aita': 'am i the asshole',
     'OP': 'oh pee',                    'op': 'oh pee',
     'IIRC': 'if i recall correctly',   'iirc': 'if i recall correctly',
     'AFAIK': 'as far as i know',       'afaik': 'as far as i know',
@@ -58,28 +64,14 @@ acronym_map = {
     'tldr': 'too long didnt read',     'TL;DR': 'too long didnt read',
     'TIL': 'today i learned',          'til': 'today i learned',
     'IDK': 'i dont know',              'idk': 'i dont know',
+    'NGL': 'not gonna lie',            'ngl': 'not gonna lie',
     'LPT': 'life pro tip',             'lpt': 'life pro tip',
+    'AITA': 'am i the asshole',        'aita': 'am i the asshole',
+    'YTA': 'you\'re the asshole',      'yta': 'you\'re the asshole',
+    'NTA': 'not the asshole',          'nta': 'not the asshole',
 }
 
-def load_posts(subreddit_name):
-    reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
-                         client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
-                         user_agent=   'python-script')
-    subreddit = reddit.subreddit(subreddit_name)
-    posts = subreddit.top(limit=10, time_filter='all')
-    post_data = []
-    for post in posts:
-        post_data.append({
-            'title': post.title,
-            'score': post.score,
-            'url': post.url,
-            'author': post.author.name,
-            'content': post.selftext
-        })
-    with codecs.open('posts.json', 'w', 'utf-8') as json_file:
-        json.dump(post_data, json_file)
-
-def load_posts_with_comments(subreddit_name):
+def load_top_posts_and_best_comments(subreddit_name):
     reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
                          client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
                          user_agent=   'python-script')
@@ -112,7 +104,7 @@ def load_posts_with_comments(subreddit_name):
                     'score':  subcomment.score,
                     'permalink': subcomment.permalink,
                     'body':   subcomment.body,
-                    'time_posted': subcomment.created_utc,
+                    'created_utc': subcomment.created_utc,
                     'id': subcomment.id
                 })
 
@@ -121,7 +113,7 @@ def load_posts_with_comments(subreddit_name):
                 'score':  comment.score,
                 'permalink': comment.permalink,
                 'body':   comment.body,
-                'time_posted': comment.created_utc,
+                'created_utc': comment.created_utc,
                 'id': comment.id,
                 'replies': subcomments_data
             })
@@ -152,6 +144,22 @@ def get_paragraphs(content):
 def get_sentences(content):
     return [s + '. ' for s in re.split("[!?.]", content) if len(s) > 0]
 
+def cleanup_paragraphs(paragraphs):
+    # go through the list and join together all adjacent paragraphs 
+    # that have two sentences or less.
+    result = []
+    joined_paragraph = ''
+    for paragraph in paragraphs:
+        sentences = get_sentences(paragraph)
+        if len(sentences) < 2:
+            joined_pargraph += paragraph
+        else:
+            result.append(joined_paragraph)
+            result.append(paragraph)
+    return [_ for _ in result if _ != '']
+
+
+
 def replace_acronyms(text):
     words = re.findall(r'\b\w+\b', text)
     pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
@@ -176,10 +184,10 @@ def cleanup_text_for_audio(text):
 
 
 def create_audio_file(text, file_name):
-    path = os.path.join(_cwd, file_name)
+    path = os.path.join(temp_dir, file_name)
     text = cleanup_text_for_audio(text)
     tts = gTTS(text=text, lang='en')
-    tts.save(os.path.join(_cwd, file_name))
+    tts.save(os.path.join(temp_dir, file_name))
     audio = AudioSegment.from_file(path, format='mp3')
     duration = audio.duration_seconds
     del audio
@@ -216,12 +224,14 @@ def wrap_text(text, max_width, font, starting_x):
 # only contains the text within a specified width - 
 # text will continue to grow downward in write_paragraph_to_image()
 # so long as there are still sentences to write in the paragraph
-def write_text_to_image(text, font, spacing, color, img, pos, max_width):
+def write_sentence_to_image(text, img, pos, width_box, font, spacing, color):
+
     draw = ImageDraw.Draw(img)
     text_width, text_height = get_text_size(font, text)
+    start_x, end_x = width_box
 
-    if pos[0] + text_width > int(max_width * 0.9):
-        lines = wrap_text(text, max_width, font, pos[0])
+    if pos[0] + text_width > int(end_x * 0.9):
+        lines = wrap_text(text, end_x - start_x, font, pos[0])
     else:
         lines = [text]
 
@@ -236,13 +246,110 @@ def write_text_to_image(text, font, spacing, color, img, pos, max_width):
         if n == 0:
             draw.text((x, y), line, fill=color, font=font)
         else:
-            draw.text((text_start_x, y), line, fill=color, font=font)
+            draw.text((start_x, y), line, fill=color, font=font)
+
         line_width, line_height = get_text_size(font, line)
         last_y = y
 
         y += spacing
-        x = pos[0] + line_width
-    return img, (x, last_y)
+
+    
+    if pos[0] + line_width > int(end_x * 0.9):
+        return img, (start_x, y)
+    else:
+        return img, (pos[0] + line_width, last_y)
+
+
+
+def write_paragraph_to_image(paragraph, img, pos, width_box, font, spacing, font_color):
+    x, y  = pos
+    max_x, max_y = width_box
+    images = []
+    sentences = get_sentences(paragraph)
+    for sentence in sentences:
+        img, (x, y) = write_sentence_to_image(sentence, img, (x, y), (pos[0], max_x),
+                                          font, spacing, font_color)
+        images.append(np.array(img))
+    return images, (x, y + 10)
+
+
+
+
+def write_comment_to_image(comment_body, img, pos, width_box, font, spacing, font_color):
+    x, y = pos
+    max_x, max_y = width_box
+    paragraphs = get_paragraphs(comment_body)
+    paragraphs = cleanup_paragraphs(paragraphs)
+    images = []
+    print(paragraphs)
+    for paragraph in paragraphs:
+        paragraph_images, end_pos = write_paragraph_to_image(paragraph, img, (x, y), width_box,
+                                                             font, spacing, font_color)
+        images = images + paragraph_images
+        x, y = pos[0], end_pos[1] + (2 * spacing)
+    return images, (x, y)
+
+
+
+
+
+def points_str(npoints):
+    multiplier = ''
+    if npoints >= 1000000:
+        npoints = npoints // 100000
+        multiplier = 'm'
+    elif npoints >= 1000:
+        npoints = npoints // 1000
+        multiplier = 'k'
+    return str(npoints)[:-1] + '.' + str(npoints)[-1] + multiplier + ' points'
+
+def time_ago_str(created_utc):
+    time_ago = int(time.time()) - int(created_utc)
+    if time_ago > 31536000:
+        n, s = time_ago // 31536000, 'year'
+    elif time_ago > 2678400:
+        n, s = time_ago // 2678400, 'month'
+    elif time_ago > 604800:
+        n, s = time_ago // 604800, 'week'
+    elif time_ago > 86400:
+        n, s = time_ago // 86400, 'day'
+    elif time_ago > 3600:
+        n, s = time_ago // 3600, 'hour'
+    elif time_ago > 60:
+        n, s = time_ago // 60, 'minute'
+    else:
+        n, s = time, 'second'
+    if n > 1:
+        s += 's'
+    return str(n) + ' ' + s + ' ago'
+
+def draw_comment_header_to_image(img, pos, username, npoints, created_utc, medals):
+    draw  = ImageDraw.Draw(img)
+    text_color = (255, 255, 255, 1)
+    font  = comment_font
+    font_height = get_text_size(font, 'A')[1]
+
+    x_padding = 10
+    x, y = pos[0], pos[1] - font_height - 25
+
+    # write the username above the image
+    username = '/u/' + username
+    username_length = get_text_size(font, username)[0]
+    username_color = (0, 255, 0, 1)
+    draw.text((x, y), username, fill=username_color, font=font)
+    x += username_length + x_padding
+
+    # write the points after the username 
+    points = points_str(npoints)
+    points_length = get_text_size(font, points)[0]
+    draw.text((x, y), points, fill=text_color, font=font)
+    x += points_length + x_padding
+
+    # write the time duration since comment was posted
+    time_ago = time_ago_str(created_utc)
+    time_ago_length = get_text_size(font, time_ago)[0]
+    draw.text((x, y), time_ago, fill=text_color, font=font)
+    x += time_ago_length + x_padding
 
 
 
@@ -276,51 +383,6 @@ def draw_comment_sidebar_to_image(img, pos):
 
     return img
 
-def points_str(npoints):
-    multiplier = ''
-    if npoints >= 1000000:
-        npoints = npoints // 100000
-        multiplier = 'm'
-    elif npoints >= 1000:
-        npoints = npoints // 1000
-        multiplier = 'k'
-    return str(npoints)[:-1] + '.' + str(npoints)[-1] + multiplier + ' points'
-
-def time_ago_str(time_ago):
-    return ''
-
-
-def draw_comment_header_to_image(img, pos, username, npoints, time_ago, medals):
-    # comment header contains: 
-    #       username
-    #       points
-    #       time posted ago
-    #       time edited ago (if applicable)
-    #       medals (if applicable)
-
-    x_padding = 10
-    draw  = ImageDraw.Draw(img)
-    color = (255, 255, 255, 1)
-    font  = content_font
-    font_height = get_text_size(font, 'A')[1]
-
-    x, y = pos[0], pos[1] - font_height - 50
-
-    # write the username above the image
-    username = '/u/' + username
-    username_length = get_text_size(font, username)[0]
-    username_color = (0, 255, 0, 1)
-    draw.text((x, y), username, fill=username_color, font=font)
-    x += username_length + x_padding
-
-    # write the username above the image
-
-    points = points_str(npoints)
-    points_length = get_text_size(font, points)[0]
-    draw.text((x, y), points, fill=color, font=font)
-    x += points_length + x_padding
-
-    return False
 
 def draw_comment_footer_to_image(img, pos):
     # comment header contains: 
@@ -331,190 +393,99 @@ def draw_comment_footer_to_image(img, pos):
     #       "Save"
     return False
 
-def write_paragraph_to_image(paragraph, img, pos, max_dimensions, font, spacing, font_color):
-    x, y  = pos
-    max_x, max_y = max_dimensions
-    images = []
-    draw = ImageDraw.Draw(img)
-    sentences = get_sentences(paragraph)
-    for sentence in sentences:
-        img, (x, y) = write_text_to_image(sentence, font, spacing, font_color,
-                                          img, (x, y), max_x)
-        images.append(np.array(img))
-        if x >= max_x * 0.8:
-            x, y = pos[0], y + spacing
-    return images, (x, y)
 
-def write_comment_to_image(text, img, pos, max_dimensions, font, spacing, font_color):
-    x, y = pos
-    max_x, max_y = max_dimensions
-    paragraphs = get_paragraphs(text)
-    images = []
-    for paragraph in paragraphs:
-        paragraph_images, end_pos = write_paragraph_to_image(paragraph, img, (x, y), max_dimensions,
-                                                            font, spacing, font_color)
-        images = images + paragraph_images
-        x, y = pos[0], end_pos[1] + (2 * spacing)
-    return images, (x, y)
 
-def create_comment_audio(comment):
+
+def create_comment_frames(comment, img, start):
+
+    end = (text_width_cutoff, text_height_cutoff)
+    spacing = get_text_size(comment_font, 'A')[1] * 1.7
+    color = (255, 255, 255, 1)
+
+    draw_comment_sidebar_to_image(img, start)
+    draw_comment_header_to_image(img, start, comment['author'], comment['score'], 
+                                 comment['created_utc'], '')
+
+    frames, text_end = write_comment_to_image(comment['body'], img, start, end, 
+                                                 comment_font, spacing, color)
+    draw_comment_footer_to_image(img, text_end)
+
+    return frames, img, text_end
+
+
+
+def create_comment_audio(comment_body):
     durations, audio_file_names, n = [], [], 1
-    paragraphs = get_paragraphs(comment)
+    paragraphs = get_paragraphs(comment_body)
     for paragraph in paragraphs:
         sentences = get_sentences(paragraph)
         for sentence in sentences:
             file_name = 'audio' + str(n) + '.mp3'
-            audio_file_names.append(os.path.join(_cwd, file_name))
+            audio_file_names.append(os.path.join(temp_dir, file_name))
             durations.append(create_audio_file(sentence, file_name))
             n += 1
     audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
     for file_name in audio_file_names[1:]:
         audio += AudioSegment.from_file(file_name, format='mp3')
-    audio.export(os.path.join(_cwd, audio_name))
+    audio.export(os.path.join(temp_dir, audio_name))
     return durations
 
 
-def create_comment_slides(comment):
-    img = Image.new("RGBA", (width, height), background_color)
 
-    start = (text_start_x, text_start_y)
-    end = (text_width_cutoff, text_height_cutoff)
-    spacing = int(content_font_height * 1)
-    color = (255, 255, 255, 1)
-
-    draw_comment_sidebar_to_image(img, start)
-    draw_comment_header_to_image(img, start, 'test_user', 12853, '', '')
-
-    images, comment_end = write_comment_to_image(comment, img, start, end, 
-                                    content_font, spacing, color)
-    draw_comment_footer_to_image(img, comment_end)
-    return images
-
-
-def create_comment_video(comment):
-    comment = strip_newlines(comment) 
+# creates audio for each sentence of the comment body with gTTs and then 
+# creates a video that displays each sentence as it is spoken and holds it 
+# for the duration that it takes to complete.
+def create_comment_video(comment, img, comment_n, file_names, start):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out    = cv2.VideoWriter(os.path.join(_cwd, video_name), fourcc, fps, (width, height))
+    out    = cv2.VideoWriter(os.path.join(temp_dir, video_name), fourcc, fps, (width, height))
 
-    durations = create_comment_audio(comment)
-    images    = create_comment_slides(comment)
+    comment['body'] = strip_newlines(comment['body'])
+    durations   = create_comment_audio(comment['body'])
+    frames, img, end = create_comment_frames(comment, img, start)
 
-    cv2_images = [cv2.cvtColor(img, cv2.COLOR_RGBA2BGR) for img in images]
+    cv2_frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
 
-    for img, duration in list(zip(cv2_images, durations)):
+    for frame, duration in list(zip(cv2_frames, durations)):
         for _ in range(int(fps * duration * magic_audio_constant)):
-            out.write(img)
-
+            out.write(frame)
 
     out.release()
     cv2.destroyAllWindows()
-    subprocess.run(f"ffmpeg -i {video_name} -i {audio_name} -c copy -map 0:v:0 -map 1:a:0 {final_video_name}", shell=True, cwd=_cwd, timeout=120)
 
+    comment_video_name = comment_video_name_base + str(comment_n) + '.mp4'
+    comment_n += 1
+    file_names.append(working_dir + '/' + comment_video_name);
+    subprocess.run(f"ffmpeg -i {temp_dir}/{video_name} -i {temp_dir}/{audio_name} -c copy -map 0:v:0 -map 1:a:0 {working_dir}/{comment_video_name}", shell=True, timeout=120)
 
+    return img, comment_n, file_names, end
 
+# creates several subvideos and makes a call to ffmpeg to concatenate them
+def create_comment_chain_video(comment):
+    comment_n = 0
+    img = Image.new("RGBA", (width, height), background_color)
+    file_names = []
+
+    pos = (text_start_x, text_start_y)
+    img, comment_n, file_names, end = create_comment_video(comment, img, comment_n, file_names, pos)
+    pos = end[0] + 50, end[1] + 100
+    img, comment_n, file_names, end = create_comment_video(comment['replies'][0], 
+                                                           img, comment_n, file_names, pos)
+
+    file_names_txt_file = working_dir + '/comment_videos.txt'
+    with open(file_names_txt_file, 'w') as f:
+        for file_name in file_names:
+            f.write('file \'' + file_name + '\'\n')
+
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {base_dir}/{final_video_name}", shell=True, timeout=120)
+
+    return False
 
 
 if __name__ == '__main__':
-    load_posts_with_comments('AmItheAsshole')
+    #load_top_posts_and_best_comments('AmItheAsshole')
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
-    create_comment_video(posts[5]["content"])
+    create_comment_chain_video(posts[0]["comments"][0])
 
-
-
-
-# def create_content_audio_files(content):
-#     paragraphs = get_paragraphs(content)
-#     durations = []
-#     n = 1
-#     for paragraph in paragraphs:
-#         sentences = get_sentences(paragraph)
-#         for sentence in sentences:
-#             file_name = 'audio' + str(n) + '.mp3'
-#             durations.append(create_audio_file(sentence, file_name))
-#             n += 1
-#     return durations
-# 
-# 
-# 
-# 
-# def create_slides(title, content):
-#     title_slide    = create_title_slide(title)
-#     content_slides = create_content_slides(content)
-#     return [title_slide] + content_slides
-# 
-# 
-# 
-# 
-# def create_title_slide(title):
-#     img = Image.new("RGB", (width, height), background_color)
-# 
-#     spacing = title_font_height + 20
-#     color = (255, 255, 255)
-#     img, _ = write_text_to_image(title, title_font, spacing, color,
-#                                  img, (0.2*width, 0.2*height), text_width_cutoff)
-#     return np.array(img)
-# 
-# 
-# 
-# def create_content_slides(text):
-#     x, y = (text_start_x, text_start_y)
-#     img = Image.new("RGB", (width, height), background_color)
-#     paragraphs = get_paragraphs(text)
-#     images = []
-#     for paragraph in paragraphs:
-#         sentences = get_sentences(paragraph)
-#         for sentence in sentences:
-#             spacing = int(content_font_height * 1)
-#             img, (x, y) = write_text_to_image(sentence, content_font, spacing, 
-#                                               content_font_color,
-#                                               img, (x, y), text_width_cutoff)
-#             images.append(np.array(img))
-# 
-# 
-#             if x >= text_width_cutoff*0.8:
-#                 x, y = text_start_x, y + spacing
-# 
-#             if y >= text_height_cutoff*0.8:
-#                 img = Image.new("RGB", (width, height), background_color)
-#                 x, y = text_start_x, text_start_y
-#     return images
-# 
-# 
-# 
-# 
-# 
-# def create_audio(title, content):
-#     durations = [create_audio_file(title, 'title.mp3')] + create_content_audio_files(content)
-#     content_audio_file_names = [os.path.join(_cwd, 'audio' + str(i + 1) + '.mp3') 
-#                                 for i in range(len(durations) - 1)]
-#     audio_file_names = [os.path.join(_cwd, title_audio_name)] + content_audio_file_names
-#     audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
-#     for file_name in audio_file_names[1:]:
-#         audio += AudioSegment.from_file(file_name, format='mp3')
-#     audio.export(os.path.join(_cwd, audio_name))
-#     return durations
-# 
-# 
-# 
-# 
-# def create_video(post):
-#     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-#     out = cv2.VideoWriter(os.path.join(_cwd, video_name), fourcc, fps, (width, height))
-# 
-#     title   = strip_newlines(post['title']) 
-#     content = strip_newlines(post['content'])   
-#     
-#     durations = create_audio(title, content)
-#     images    = create_slides(title, content)
-# 
-#     for img, duration in list(zip(images, durations)):
-#         for _ in range(int(fps * duration * magic_audio_constant)):
-#             out.write(img)
-# 
-#     out.release()
-#     cv2.destroyAllWindows()
-# 
-#     subprocess.run(f"ffmpeg -i {video_name} -i {audio_name} -c copy -map 0:v:0 -map 1:a:0 {final_video_name}", shell=True, cwd=_cwd, timeout=120)
 
 
