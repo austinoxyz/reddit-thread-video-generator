@@ -20,7 +20,7 @@ import subprocess
 height, width = 1080, 1920 
 aspect = float(width / height)
 fps = 30
-background_color = (90, 90, 90, 0)
+background_color = (26, 26, 27, 0)
 
 text_width_cutoff = width * 0.96
 text_start_x  = width - text_width_cutoff
@@ -142,7 +142,28 @@ def get_paragraphs(content):
     return [s for s in re.split("(\n)+", content) if len(s) > 0]
 
 def get_sentences(content):
-    return [s + '. ' for s in re.split("[!?.]", content) if len(s) > 0]
+    return [s.strip() + '.' for s in re.split("[!?.]", content) if len(s) > 0]
+
+def replace_acronyms(text):
+    words = re.findall(r'\b\w+\b', text)
+    pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
+    return re.sub(pattern, lambda x: acronym_map[x.group()], text)
+
+def strip_newlines(text):
+    return text.replace('\n', '')
+
+def strip_excess_newlines(text):
+    pattern = r'(\n)+'
+    return re.sub(pattern, '\n', text)
+
+def insert_spaces_after_sentences(paragraph):
+    result = ''
+    for i in range(len(paragraph)):
+        char = paragraph[i]
+        result += char
+        if char == '.' and (i + 1 >= len(paragraph) or paragraph[i + 1] != ' '):
+            result += ' '
+    return result
 
 def cleanup_paragraphs(paragraphs):
     # go through the list and join together all adjacent paragraphs 
@@ -156,21 +177,10 @@ def cleanup_paragraphs(paragraphs):
         else:
             result.append(joined_paragraph)
             result.append(paragraph)
-    return [_ for _ in result if _ != '']
+    return [insert_spaces_after_sentences(p) for p in result if p != '']
 
 
 
-def replace_acronyms(text):
-    words = re.findall(r'\b\w+\b', text)
-    pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
-    return re.sub(pattern, lambda x: acronym_map[x.group()], text)
-
-def strip_newlines(text):
-    return text.replace('\n', '')
-
-def strip_excess_newlines(text):
-    pattern = r'(\n)+'
-    return re.sub(pattern, '\n', text)
 
 def cleanup_text_for_video(text):
     text = text.replace('’', '\'')
@@ -335,7 +345,7 @@ def draw_comment_header_to_image(img, pos, username, npoints, created_utc, medal
     # write the username above the image
     username = '/u/' + username
     username_length = get_text_size(font, username)[0]
-    username_color = (0, 255, 0, 1)
+    username_color = (22, 210, 252, 1)
     draw.text((x, y), username, fill=username_color, font=font)
     x += username_length + x_padding
 
@@ -357,7 +367,6 @@ def draw_comment_sidebar_to_image(img, pos):
     # comment sidebar contains: 
     #       upvote/downvote icons
     #       line going southward that runs off the screen (for comment tree)
-
     x, y = int(pos[0] - 50), int(pos[1])
 
     # load the upvote image, resize, and draw
@@ -376,12 +385,10 @@ def draw_comment_sidebar_to_image(img, pos):
 
     # draw the indentation line
     draw = ImageDraw.Draw(img)
-    line_color = (200, 200, 200, 1)
+    line_color = (40, 40, 40, 1)
     x_offset = upvote_size[0] / 2
     line_start, line_end = (x + x_offset, y + 100), (x + x_offset, height)
     draw.line([line_start, line_end], fill=line_color, width=5)
-
-    return img
 
 
 def draw_comment_footer_to_image(img, pos):
@@ -391,7 +398,12 @@ def draw_comment_footer_to_image(img, pos):
     #       "Share"
     #       "Report"
     #       "Save"
-    return False
+    x, y = pos
+    cf_img  = Image.open('./res/comment_footer.png').convert("RGBA")
+    size = (int(cf_img.width / 2), int(cf_img.height / 2))
+    cf_img  = cf_img.resize(size)
+    pos  = (int(x), int(y) - 20) # huh? why need?
+    img.paste(cf_img, pos, cf_img)
 
 
 
@@ -408,7 +420,11 @@ def create_comment_frames(comment, img, start):
 
     frames, text_end = write_comment_to_image(comment['body'], img, start, end, 
                                                  comment_font, spacing, color)
+
+    # draw comment footer to last frame
+    last_img = Image.fromarray(frames[-1])
     draw_comment_footer_to_image(img, text_end)
+    frames[-1] = np.array(last_img)
 
     return frames, img, text_end
 
@@ -432,15 +448,19 @@ def create_comment_audio(comment_body):
 
 
 
+# used in create_comment_video below
+get_file_name_for_comment = lambda n: comment_video_name_base + str(n) + '.mp4'
+
 # creates audio for each sentence of the comment body with gTTs and then 
 # creates a video that displays each sentence as it is spoken and holds it 
 # for the duration that it takes to complete.
-def create_comment_video(comment, img, comment_n, file_names, start):
+def create_comment_video(comment, img, start, comment_n):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, video_name), fourcc, fps, (width, height))
 
     comment['body'] = strip_newlines(comment['body'])
-    durations   = create_comment_audio(comment['body'])
+
+    durations        = create_comment_audio(comment['body'])
     frames, img, end = create_comment_frames(comment, img, start)
 
     cv2_frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
@@ -452,26 +472,35 @@ def create_comment_video(comment, img, comment_n, file_names, start):
     out.release()
     cv2.destroyAllWindows()
 
-    comment_video_name = comment_video_name_base + str(comment_n) + '.mp4'
-    comment_n += 1
-    file_names.append(working_dir + '/' + comment_video_name);
+    comment_video_name = get_file_name_for_comment(comment_n)
     subprocess.run(f"ffmpeg -i {temp_dir}/{video_name} -i {temp_dir}/{audio_name} -c copy -map 0:v:0 -map 1:a:0 {working_dir}/{comment_video_name}", shell=True, timeout=120)
 
-    return img, comment_n, file_names, end
+    return img, end, comment_video_name
+
+
+
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment):
-    comment_n = 0
     img = Image.new("RGBA", (width, height), background_color)
+    comment_n = 0
     file_names = []
 
+    # TODO this is temporary. Must preprocess comment chain and compute total comment height
+    # for each comment beforehand, and loop through the "comment structure" 
+    # given by `comment` argument to the function, keeping track of 
     pos = (text_start_x, text_start_y)
-    img, comment_n, file_names, end = create_comment_video(comment, img, comment_n, file_names, pos)
-    pos = end[0] + 50, end[1] + 100
-    img, comment_n, file_names, end = create_comment_video(comment['replies'][0], 
-                                                           img, comment_n, file_names, pos)
+    img, end, file_name = create_comment_video(comment, img, pos, comment_n)
+    comment_n += 1
+    file_names.append(working_dir + '/' + file_name)
+
+    pos = end[0] + 50, end[1] + 80
+    img, end, file_name = create_comment_video(comment['replies'][0], img, pos, comment_n)
+    comment_n += 1
+    file_names.append(working_dir + '/' + file_name)
 
     file_names_txt_file = working_dir + '/comment_videos.txt'
+
     with open(file_names_txt_file, 'w') as f:
         for file_name in file_names:
             f.write('file \'' + file_name + '\'\n')
