@@ -225,7 +225,8 @@ def wrap_text(text, max_width, font, starting_x):
             line = word
 
     wrapped_text.append(line)
-    return wrapped_text
+
+    return [line for line in wrapped_text if line != '']
 
 
 
@@ -249,27 +250,23 @@ def write_sentence_to_image(text, img,
 
     x, y = pos
     last_y = y
-    
-    if lines[0] == '':
-        x = pos[0]
-        y += spacing
 
-    for n, line in enumerate(lines):
-        if n == 0:
-            draw.text((x, y), line, fill=color, font=font)
-        else:
-            draw.text((start_x, y), line, fill=color, font=font)
+    draw.text((x, y), lines[0], fill=color, font=font)
+    line_width, line_height = get_text_size(font, lines[0])
 
+    if len(lines) == 1:
+        return img, (pos[0] + line_width, y)
+
+    y += spacing
+
+    for n, line in enumerate(lines[1:]):
+        draw.text((start_x, y), line, fill=color, font=font)
         line_width, line_height = get_text_size(font, line)
         last_y = y
-
         y += spacing
 
-    
-    if pos[0] + line_width > int(end_x * 0.9):
-        return img, (start_x, y)
-    else:
-        return img, (pos[0] + line_width, last_y)
+    return img, (start_x + line_width, last_y)
+
 
 
 
@@ -280,13 +277,13 @@ def write_paragraph_to_image(paragraph, img,
     max_x, max_y = width_box
     images = []
     sentences = get_sentences(paragraph)
+    print(sentences)
     for sentence in sentences:
         img, (x, y) = write_sentence_to_image(sentence, img, 
                                               (x, y), (pos[0], max_x), spacing, 
                                               font, color)
         images.append(np.array(img))
     return images, (x, y)
-#return images, (x, y + 10)
 
 
 
