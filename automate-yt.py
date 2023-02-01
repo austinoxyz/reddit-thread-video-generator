@@ -234,7 +234,9 @@ def wrap_text(text, max_width, font, starting_x):
 # only contains the text within a specified width - 
 # text will continue to grow downward in write_paragraph_to_image()
 # so long as there are still sentences to write in the paragraph
-def write_sentence_to_image(text, img, pos, width_box, font, spacing, color):
+def write_sentence_to_image(text, img, 
+                            pos, width_box, spacing, 
+                            font, color):
 
     draw = ImageDraw.Draw(img)
     text_width, text_height = get_text_size(font, text)
@@ -271,30 +273,37 @@ def write_sentence_to_image(text, img, pos, width_box, font, spacing, color):
 
 
 
-def write_paragraph_to_image(paragraph, img, pos, width_box, font, spacing, font_color):
+def write_paragraph_to_image(paragraph, img, 
+                             pos, width_box, spacing, 
+                             font, color):
     x, y  = pos
     max_x, max_y = width_box
     images = []
     sentences = get_sentences(paragraph)
     for sentence in sentences:
-        img, (x, y) = write_sentence_to_image(sentence, img, (x, y), (pos[0], max_x),
-                                          font, spacing, font_color)
+        img, (x, y) = write_sentence_to_image(sentence, img, 
+                                              (x, y), (pos[0], max_x), spacing, 
+                                              font, color)
         images.append(np.array(img))
-    return images, (x, y + 10)
+    return images, (x, y)
+#return images, (x, y + 10)
 
 
 
 
-def write_comment_to_image(comment_body, img, pos, width_box, font, spacing, font_color):
+def write_comment_to_image(comment_body, img, 
+                           pos, width_box, spacing):
     x, y = pos
     max_x, max_y = width_box
+    color = (255, 255, 255, 1)
     paragraphs = get_paragraphs(comment_body)
     paragraphs = cleanup_paragraphs(paragraphs)
     images = []
     print(paragraphs)
     for paragraph in paragraphs:
-        paragraph_images, end_pos = write_paragraph_to_image(paragraph, img, (x, y), width_box,
-                                                             font, spacing, font_color)
+        paragraph_images, end_pos = write_paragraph_to_image(paragraph, img, 
+                                                             (x, y), width_box, spacing, 
+                                                             comment_font, color)
         images = images + paragraph_images
         x, y = pos[0], end_pos[1] + (2 * spacing)
     return images, (x, y)
@@ -333,7 +342,8 @@ def time_ago_str(created_utc):
         s += 's'
     return str(n) + ' ' + s + ' ago'
 
-def draw_comment_header_to_image(img, pos, username, npoints, created_utc, medals):
+def draw_comment_header_to_image(img, pos, 
+                                 username, npoints, created_utc, medals):
     draw  = ImageDraw.Draw(img)
     text_color = (255, 255, 255, 1)
     font  = comment_font
@@ -418,8 +428,8 @@ def create_comment_frames(comment, img, start):
     draw_comment_header_to_image(img, start, comment['author'], comment['score'], 
                                  comment['created_utc'], '')
 
-    frames, text_end = write_comment_to_image(comment['body'], img, start, end, 
-                                                 comment_font, spacing, color)
+    frames, text_end = write_comment_to_image(comment['body'], img, 
+                                              start, end, spacing)
 
     # draw comment footer to last frame
     last_img = Image.fromarray(frames[-1])
