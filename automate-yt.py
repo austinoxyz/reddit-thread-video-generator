@@ -37,19 +37,18 @@ content_font_size = 20
 content_font = ImageFont.truetype(content_font_path, content_font_size)
 content_font_color = (255, 255, 255)
 
-comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
+#comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
+comment_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
 comment_font_size = 24
 comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
 comment_font_color = (255, 255, 255)
 
-base_dir           = '/home/anon/Videos/automate-yt'
-temp_dir           = base_dir + '/tmp'
-video_name         = 'comment_video_no_audio.mp4'
-audio_name         = 'comment_audio.mp3'
-
+base_dir    = '/home/anon/Videos/automate-yt'
+temp_dir    = base_dir + '/tmp'
+video_name  = 'audioless_video.mp4'
+audio_name  = 'audio.mp3'
 working_dir = base_dir + '/working'
-comment_video_name_base   = 'comment_final'
-
+comment_video_name_base = 'comment'
 final_video_name = 'final.mp4'
 
 # for syncing each audio file to its respective frame
@@ -339,6 +338,9 @@ def time_ago_str(created_utc):
         s += 's'
     return str(n) + ' ' + s + ' ago'
 
+
+
+
 def draw_comment_header_to_image(img, pos, 
                                  username, npoints, created_utc, medals):
     draw  = ImageDraw.Draw(img)
@@ -371,9 +373,6 @@ def draw_comment_header_to_image(img, pos,
 
 
 def draw_comment_sidebar_to_image(img, pos):
-    # comment sidebar contains: 
-    #       upvote/downvote icons
-    #       line going southward that runs off the screen (for comment tree)
     x, y = int(pos[0] - 50), int(pos[1])
 
     # load the upvote image, resize, and draw
@@ -398,13 +397,9 @@ def draw_comment_sidebar_to_image(img, pos):
     draw.line([line_start, line_end], fill=line_color, width=5)
 
 
+
+
 def draw_comment_footer_to_image(img, pos):
-    # comment header contains: 
-    #       "Reply"
-    #       "Give Award"
-    #       "Share"
-    #       "Report"
-    #       "Save"
     x, y = pos
     cf_img  = Image.open('./res/comment_footer.png').convert("RGBA")
     size = (int(cf_img.width / 2), int(cf_img.height / 2))
@@ -458,9 +453,15 @@ def create_comment_audio(comment_body):
 # used in create_comment_video below
 get_file_name_for_comment = lambda n: comment_video_name_base + str(n) + '.mp4'
 
-# creates audio for each sentence of the comment body with gTTs and then 
+# creates audio for each sentence of the comment body with gTTs and combines
+# them into one long mp3 file 
+#
 # creates a video that displays each sentence as it is spoken and holds it 
-# for the duration that it takes to complete.
+# for the duration of its respective spoken duration from gTTS, with no audio
+# 
+# combines the audioless video and the audio with ffmpeg for a video of just this comment
+# 
+# returns the img given, in case this comment is part of a tree
 def create_comment_video(comment, img, start, comment_n):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, video_name), fourcc, fps, (width, height))
@@ -501,6 +502,7 @@ def create_comment_chain_video(comment):
     comment_n += 1
     file_names.append(working_dir + '/' + file_name)
 
+    # TODO temporary read above
     pos = end[0] + 50, end[1] + 80
     img, end, file_name = create_comment_video(comment['replies'][0], img, pos, comment_n)
     comment_n += 1
