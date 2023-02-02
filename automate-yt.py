@@ -38,21 +38,34 @@ text_start_y  = screen_height - text_height_cutoff
 #comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
 #comment_font_color = (255, 255, 255)
 
-comment_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
+comment_font = freetype.Face('./Roboto-Regular.ttf')
+#comment_font = freetype.Face('/usr/share/fonts/truetype/quicksand/Quicksand-Bold.ttf')
 comment_font_sz = 32
 comment_font.set_char_size(comment_font_sz * 64)
 comment_font.load_char('A')
 comment_font_height = comment_font.height >> 6
 
 header_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
+#header_font = freetype.Face('./Roboto-Regular.ttf')
 header_font_sz = 24
 header_font.set_char_size(header_font_sz * 64)
 header_font.load_char('A')
 
-line_spacing = int(comment_font.height >> 6)
+magic_spacing_coefficient = 1.2
+line_spacing = int((comment_font.height >> 6) * magic_spacing_coefficient)
 
 
+upvote_img  = Image.open('./res/upvote.png').convert("RGBA")
+upvote_size = (int(upvote_img.width / 5), int(upvote_img.height / 5))
+upvote_img  = upvote_img.resize(upvote_size)
 
+downvote_img  = Image.open('./res/downvote.png').convert("RGBA")
+downvote_size = (int(downvote_img.width / 5), int(downvote_img.height / 5))
+downvote_img  = downvote_img.resize(downvote_size)
+
+footer_img  = Image.open('./res/comment_footer.png').convert("RGBA")
+size = (int(footer_img.width / 2), int(footer_img.height / 2))
+footer_img  = footer_img.resize(size)
 
 
 base_dir    = '/home/anon/Videos/automate-yt'
@@ -99,7 +112,6 @@ def load_top_posts_and_best_comments(subreddit_name):
             # not sure why this is happening to the last comment in the list
             if comment.author is None:
                 continue
-            print(comment.author.name)
             subcomments = [subcomment for subcomment in comment.replies.list() 
                         if not isinstance(subcomment, MoreComments)]
             subcomments.sort(key=lambda x: x.score, reverse=True)
@@ -109,7 +121,6 @@ def load_top_posts_and_best_comments(subreddit_name):
                 # not sure why this is happening to the last comment in the list
                 if subcomment.author is None:
                     continue
-                print(subcomment.author.name)
                 subcomments_data.append({
                     'author': subcomment.author.name,
                     'score':  subcomment.score,
@@ -247,7 +258,7 @@ def wrap_text(text, max_width, font, starting_x):
 
 
 
-def draw_bitmap_to_image(bitmap, img, pos):
+def draw_bitmap_to_image(bitmap, img, pos, color):
     x, y = pos
     x_max = x + bitmap.width
     y_max = y + bitmap.rows
@@ -258,6 +269,12 @@ def draw_bitmap_to_image(bitmap, img, pos):
             pixel = img.getpixel((i, j))
             pixel |= int(bitmap.buffer[q * bitmap.width + p])
             img.putpixel((i, j), pixel)
+            #pixel = img.getpixel((i, j))
+            #alpha = int(bitmap.buffer[q * bitmap.width + p])
+            #red   = int(color[0] * alpha / 0xff)
+            #green = int(color[1] * alpha / 0xff)
+            #blue  = int(color[2] * alpha / 0xff)
+            #img.putpixel((i, j), (red, green, blue, color[3]))
 
 
 # draws endlessly to the right with no logic otherwise
@@ -273,7 +290,8 @@ def draw_string_to_image(string, img, pos, font, color):
         bitmap = font.glyph.bitmap
 
         c_img = Image.new("L", (bitmap.width, bitmap.rows), 0)
-        draw_bitmap_to_image(bitmap, c_img, (0, 0))
+        #c_img = Image.new("RGBA", (bitmap.width, bitmap.rows), 0)
+        draw_bitmap_to_image(bitmap, c_img, (0, 0), (255, 0, 0, 1))
         c_img.convert("RGBA")
 
         draw_x = x + font.glyph.bitmap_left
@@ -303,12 +321,8 @@ def write_sentence_to_image(text, img,
     start_x, end_x = width_box
     last_y = y
 
-    draw = ImageDraw.Draw(img)
-    draw.fontmode = "L"
-
     text_width, text_height, _ = get_text_size_freetype(text, font)
-    #line_spacing = int(text_height * 1.4)
-    end_padding = 30
+    end_padding = 25
 
     if pos[0] + text_width > int(end_x * 0.9):
         lines = wrap_text(text, end_x - start_x, font, pos[0])
@@ -418,14 +432,9 @@ def draw_comment_header_to_image(img, pos,
     (x, y) = draw_string_to_image('/u/' + username, img, (x, y), header_font, username_color)[1]
     x += x_padding
 
-    # write the points after the username 
-    (x, y) = draw_string_to_image(points_str(npoints), img, (x, y), header_font, text_color)[1]
-    x += x_padding
-
-    # write the time duration since comment was posted
-    (x, y) = draw_string_to_image(time_ago_str(created_utc), img, (x, y), header_font, text_color)[1]
-    x += x_padding
-
+    # write the points and time duration after the username 
+    string = ' • ' + points_str(npoints) + ' • ' + time_ago_str(created_utc)
+    (x, y) = draw_string_to_image(string, img, (x, y), header_font, text_color)[1]
 
 
 
@@ -433,16 +442,10 @@ def draw_comment_sidebar_to_image(img, pos):
     x, y = pos
 
     # load the upvote image, resize, and draw
-    upvote_img  = Image.open('./res/upvote.png').convert("RGBA")
-    upvote_size = (int(upvote_img.width / 5), int(upvote_img.height / 5))
-    upvote_img  = upvote_img.resize(upvote_size)
     upvote_pos  = (x, y - 20)
     img.paste(upvote_img, upvote_pos, upvote_img)
 
     # load the downvote image, resize, and draw
-    downvote_img  = Image.open('./res/downvote.png').convert("RGBA")
-    downvote_size = (int(downvote_img.width / 5), int(downvote_img.height / 5))
-    downvote_img  = downvote_img.resize(downvote_size)
     downvote_pos  = (x, y + 40)
     img.paste(downvote_img, downvote_pos, downvote_img)
 
@@ -458,11 +461,8 @@ def draw_comment_sidebar_to_image(img, pos):
 
 def draw_comment_footer_to_image(img, pos):
     x, y = pos
-    cf_img  = Image.open('./res/comment_footer.png').convert("RGBA")
-    size = (int(cf_img.width / 2), int(cf_img.height / 2))
-    cf_img  = cf_img.resize(size)
-    img.paste(cf_img, (x, y), cf_img)
-    return (x, y + cf_img.height + 10)
+    img.paste(footer_img, (x, y), footer_img)
+    return (x, y + footer_img.height + 10)
 
 
 
@@ -473,8 +473,8 @@ def create_comment_frames(comment, img, start):
     color = (255, 255, 255, 1)
 
     x, y = start
-    sidebar_pos = x - 50, y - 40
-    header_pos  = x,      y - 60
+    sidebar_pos = x - 50, y - 30
+    header_pos  = x,      y - 50
 
     draw_comment_sidebar_to_image(img, sidebar_pos)
     draw_comment_header_to_image(img, header_pos, comment['author'], comment['score'], 
@@ -545,7 +545,7 @@ def create_comment_video(comment, img, start, comment_n):
 
     cv2_frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
 
-    print('len(cv2_frames) = {len(cv2_frames)}, len(durations) = {len(durations)}')
+    print(f"len(cv2_frames) = {len(cv2_frames)}, len(durations) = {len(durations)}")
     for frame, duration in list(zip(cv2_frames, durations)):
         for _ in range(int(fps * duration * magic_audio_constant)):
             out.write(frame)
