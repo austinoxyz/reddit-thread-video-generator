@@ -6,6 +6,7 @@ import time
 import datetime
 import textwrap
 import codecs
+import freetype
 
 import praw
 import json
@@ -37,11 +38,17 @@ content_font_size = 20
 content_font = ImageFont.truetype(content_font_path, content_font_size)
 content_font_color = (255, 255, 255)
 
-#comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
+comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
 comment_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
 comment_font_size = 24
 comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
 comment_font_color = (255, 255, 255)
+
+ft_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
+ft_font_sz = 24
+ft_font.set_char_size(ft_font_sz * 64)
+ft_font.load_char('A', freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)
+ft_font_height = ft_font.height >> 6
 
 base_dir    = '/home/anon/Videos/automate-yt'
 temp_dir    = base_dir + '/tmp'
@@ -130,18 +137,11 @@ def load_top_posts_and_best_comments(subreddit_name):
     with codecs.open('posts.json', 'w', 'utf-8') as json_file:
         json.dump(post_data, json_file)
 
-def get_text_size(font, text):
-    bbox = font.getbbox(text)
-    return (bbox[2] - bbox[0], bbox[3] - bbox[1])
-
-title_font_height   = get_text_size(title_font, 'example_word')[1]
-content_font_height = get_text_size(content_font, 'example_word')[1]
-
 def get_paragraphs(content):
     return [s for s in re.split("(\n)+", content) if len(s) > 0]
 
 def get_sentences(content):
-    return [s.strip() + '.' for s in re.split("[!?.]", content) if len(s) > 0]
+    return [s.strip() + '.' for s in re.split("[!?.]", content) if len(s) > 1]
 
 def replace_acronyms(text):
     words = re.findall(r'\b\w+\b', text)
@@ -192,15 +192,33 @@ def cleanup_text_for_audio(text):
 
 
 
-def create_audio_file(text, file_name):
-    path = os.path.join(temp_dir, file_name)
-    text = cleanup_text_for_audio(text)
-    tts = gTTS(text=text, lang='en')
-    tts.save(os.path.join(temp_dir, file_name))
-    audio = AudioSegment.from_file(path, format='mp3')
-    duration = audio.duration_seconds
-    del audio
-    return int(duration)
+
+
+
+
+def get_text_size(font, text):
+    bbox = font.getbbox(text)
+    return (bbox[2] - bbox[0], bbox[3] - bbox[1])
+
+def get_text_size_freetype(text, face):
+    slot = face.glyph
+    # First pass to compute bbox
+    width, height, baseline = 0, 0, 0
+    previous = chr(0)
+    for c in enumerate(text):
+        face.load_char(c)
+        bitmap = slot.bitmap
+        height = max(height,
+                     bitmap.rows + max(0,-(slot.bitmap_top-bitmap.rows)))
+        baseline = max(baseline, max(0,-(slot.bitmap_top-bitmap.rows)))
+        kerning = face.get_kerning(previous, c)
+        width += (slot.advance.x >> 6) + (kerning.x >> 6)
+        previous = c
+    return width, height, baseline
+
+
+title_font_height   = get_text_size(title_font,   'example_word')[1]
+content_font_height = get_text_size(content_font, 'example_word')[1]
 
 
 
@@ -213,6 +231,7 @@ def wrap_text(text, max_width, font, starting_x):
 
     for word in words:
         text_width, text_height = get_text_size(font, line + ' ' + word)
+        #text_width, _, _ = get_text_size_freetype(line + ' ' + word, font)
 
         if starting_x + text_width < max_width:
             line += ' ' + word
@@ -224,10 +243,51 @@ def wrap_text(text, max_width, font, starting_x):
             line = word
 
     wrapped_text.append(line)
-
     return [line for line in wrapped_text if line != '']
 
 
+# draws endlessly to the right with no logic otherwise
+def draw_string_onto_image(string, img, pos, font, color):
+#    pen = freetype.FT_Vector(int(pos[0]) * 64, int(pos[1]) * 64)
+#    img_draw = ImageDraw.Draw(img)
+#    spacing = 0
+    x, y = 0, 0
+    previous = chr(0)
+    width, height, baseline = get_text_size_freetype(string, font)
+    Z = numpy.zeros((height, width), dtype=numpy.ubyte)
+    for c in string:
+#        font.load_char(c, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)
+#        c_height = font.height >> 6
+#        bitmap = font.glyph.bitmap
+#        bitmap_data = bitmap.buffer
+#        draw_x = pen.x >> 6
+#        draw_y = (pen.y - font.glyph.bitmap_top) >> 6
+#        c_img = Image.new("L", (bitmap.width, bitmap.rows), 0)
+#        draw = ImageDraw.Draw(img)
+#        Z = numpy.zeros((
+#        for _x in range(bitmap.width):
+#            for _y in range(bitmap.rows):
+#                value = bitmap_data[_y * bitmap.pitch + _x // 8]
+#                if value & (0x80 >> (_x % 8)):
+#                    draw_point_x = draw_x + _x
+#                    draw_point_y = draw_y + (line_height - c_height) + _y
+#                    draw.point((draw_point_x, draw_point_y), 255)
+#        c_img.convert("RGBA")
+#        img.paste(c_img, (draw_x, draw_y), c_img)
+#        pen.x += font.glyph.advance.x + spacing
+        font.load_char(c)
+        bitmap = slot.bitmap
+        top, left = slot.bitmap_top, slot.bitmap_left
+        w, h = bitmap.width, bitmap.rows
+        y = height - baseline - top
+        kerning = font.get_kerning(previous, c)
+        x += (kerning.x >> 6)
+        Z[y:y+h,x:x+w] += numpy.array(bitmap.buffer, dtype='ubyte').reshape(h, w)
+        x += (slot.advance.x >> 6)
+        previous = c
+    return img
+
+    
 
 
 
@@ -239,32 +299,46 @@ def write_sentence_to_image(text, img,
                             font, color):
 
     draw = ImageDraw.Draw(img)
-    text_width, text_height = get_text_size(font, text)
+    draw.fontmode = "L"
     start_x, end_x = width_box
+    end_padding = 10
 
+    text_width, text_height = get_text_size(font, text)
     if pos[0] + text_width > int(end_x * 0.9):
         lines = wrap_text(text, end_x - start_x, font, pos[0])
     else:
         lines = [text]
 
+#    text_width = get_text_size_freetype(text, font)[0]
+#    if pos[0] + text_width > int(end_x * 0.9):
+#        lines = wrap_text(text, end_x - start_x, font, pos[0])
+#    else:
+#        lines = [text]
+
     x, y = pos
     last_y = y
 
-    draw.text((x, y), lines[0], fill=color, font=font)
+    draw.text((x, y), lines[0], fill=color, font=font, tier='freetype', method='antialias')
     line_width, line_height = get_text_size(font, lines[0])
 
+    # must multiply font size by 64 as freetype font size is 1/64th of a point
+#    draw_string_onto_image(lines[0], img, pos, ft_font, color)
+#    line_width = get_text_size_freetype(lines[0], font)[0]
+
     if len(lines) == 1:
-        return img, (pos[0] + line_width, y)
+        return img, (pos[0] + line_width + end_padding, y)
 
     y += spacing
 
     for n, line in enumerate(lines[1:]):
-        draw.text((start_x, y), line, fill=color, font=font)
+        #        draw_string_onto_image(lines[0], img, pos, ft_font, color)
+        #        line_width = get_text_size_freetype(line, font)[0]
+        draw.text((start_x, y), line, fill=color, font=font, tier='freetype', method='antialias')
         line_width, line_height = get_text_size(font, line)
         last_y = y
         y += spacing
 
-    return img, (start_x + line_width, last_y)
+    return img, (start_x + line_width + end_padding, last_y)
 
 
 
@@ -404,7 +478,7 @@ def draw_comment_footer_to_image(img, pos):
     cf_img  = Image.open('./res/comment_footer.png').convert("RGBA")
     size = (int(cf_img.width / 2), int(cf_img.height / 2))
     cf_img  = cf_img.resize(size)
-    pos  = (int(x), int(y) - 20) # huh? why need?
+    pos  = (int(x), int(y) - 10) # huh? why need?
     img.paste(cf_img, pos, cf_img)
 
 
@@ -431,6 +505,16 @@ def create_comment_frames(comment, img, start):
     return frames, img, text_end
 
 
+
+def create_audio_file(text, file_name):
+    path = os.path.join(temp_dir, file_name)
+    text = cleanup_text_for_audio(text)
+    tts = gTTS(text=text, lang='en')
+    tts.save(os.path.join(temp_dir, file_name))
+    audio = AudioSegment.from_file(path, format='mp3')
+    duration = audio.duration_seconds
+    del audio
+    return int(duration)
 
 def create_comment_audio(comment_body):
     durations, audio_file_names, n = [], [], 1
@@ -485,8 +569,7 @@ def create_comment_video(comment, img, start, comment_n):
 
     return img, end, comment_video_name
 
-
-
+    
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment):
