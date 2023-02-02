@@ -23,32 +23,37 @@ aspect = float(screen_width / screen_height)
 fps = 30
 background_color = (26, 26, 27, 0)
 
-text_width_cutoff = screen_width * 0.96
+text_width_cutoff = int(screen_width * 0.96)
 text_start_x  = screen_width - text_width_cutoff
 
-text_height_cutoff = screen_height * 0.90
+text_height_cutoff = int(screen_height * 0.90)
 text_start_y  = screen_height - text_height_cutoff
 
-title_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
-title_font_size = 92
-title_font = ImageFont.truetype(title_font_path, title_font_size)
 
-content_font_path = os.path.join("/usr/share/fonts/truetype", "dejavu/DejaVuSerif.ttf")
-content_font_size = 20
-content_font = ImageFont.truetype(content_font_path, content_font_size)
-content_font_color = (255, 255, 255)
 
-comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
-comment_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
-comment_font_size = 24
-comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
-comment_font_color = (255, 255, 255)
 
-ft_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
-ft_font_sz = 40
-ft_font.set_char_size(ft_font_sz * 64)
-ft_font.load_char('A')
-ft_font_height = ft_font.height >> 6
+#comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
+#comment_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
+#comment_font_size = 24
+#comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
+#comment_font_color = (255, 255, 255)
+
+comment_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
+comment_font_sz = 32
+comment_font.set_char_size(comment_font_sz * 64)
+comment_font.load_char('A')
+comment_font_height = comment_font.height >> 6
+
+header_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
+header_font_sz = 24
+header_font.set_char_size(header_font_sz * 64)
+header_font.load_char('A')
+
+line_spacing = int(comment_font.height >> 6)
+
+
+
+
 
 base_dir    = '/home/anon/Videos/automate-yt'
 temp_dir    = base_dir + '/tmp'
@@ -217,9 +222,6 @@ def get_text_size_freetype(text, face):
     return width, height, baseline
 
 
-title_font_height   = get_text_size(title_font,   'example_word')[1]
-content_font_height = get_text_size(content_font, 'example_word')[1]
-
 
 
 def wrap_text(text, max_width, font, starting_x):
@@ -246,7 +248,7 @@ def wrap_text(text, max_width, font, starting_x):
 
 
 def draw_bitmap_to_image(bitmap, img, pos):
-    x, y = int(pos[0]), int(pos[1])
+    x, y = pos
     x_max = x + bitmap.width
     y_max = y + bitmap.rows
     for p, i in enumerate(range(x, x_max)):
@@ -259,9 +261,9 @@ def draw_bitmap_to_image(bitmap, img, pos):
 
 
 # draws endlessly to the right with no logic otherwise
-def draw_string_onto_image(string, img, pos, font, color):
+def draw_string_to_image(string, img, pos, font, color):
 
-    x, y = int(pos[0]), int(pos[1])
+    x, y = pos
     slot = font.glyph
     previous = 0
     width, height, baseline = get_text_size_freetype(string, font)
@@ -294,43 +296,45 @@ def draw_string_onto_image(string, img, pos, font, color):
 # text will continue to grow downward in write_paragraph_to_image()
 # so long as there are still sentences to write in the paragraph
 def write_sentence_to_image(text, img, 
-                            pos, width_box, spacing, 
+                            pos, width_box,
                             font, color):
+
+    x, y = pos
+    start_x, end_x = width_box
+    last_y = y
 
     draw = ImageDraw.Draw(img)
     draw.fontmode = "L"
-    start_x, end_x = width_box
-    end_padding = 10
 
-    text_width = get_text_size_freetype(text, font)[0]
+    text_width, text_height, _ = get_text_size_freetype(text, font)
+    #line_spacing = int(text_height * 1.4)
+    end_padding = 30
+
     if pos[0] + text_width > int(end_x * 0.9):
         lines = wrap_text(text, end_x - start_x, font, pos[0])
     else:
         lines = [text]
 
-    x, y = pos
-    last_y = y
-
-    img, (x, y) = draw_string_onto_image(lines[0], img, (x, y), ft_font, color)
+    img, (x, y) = draw_string_to_image(lines[0], img, (x, y), font, color)
     line_width = get_text_size_freetype(lines[0], font)[0]
 
     if len(lines) == 1:
-        return img, (x, y)
+        return img, (x + end_padding, y)
 
-    y += spacing
+    y += line_spacing
 
     for n, line in enumerate(lines[1:]):
-        img, (x, y) = draw_string_onto_image(line, img, (start_x, y), ft_font, color)
+        img, (x, y) = draw_string_to_image(line, img, (start_x, y), font, color)
         last_y = y
-        y += spacing
+        y += line_spacing
 
-    return img, (x, last_y)
+    return img, (x + end_padding, last_y)
 
 
 
 
 def write_paragraph_to_image(paragraph, img, 
-                             pos, width_box, spacing, 
+                             pos, width_box,
                              font, color):
     x, y  = pos
     max_x, max_y = width_box
@@ -339,7 +343,7 @@ def write_paragraph_to_image(paragraph, img,
     print(sentences)
     for sentence in sentences:
         img, (x, y) = write_sentence_to_image(sentence, img, 
-                                              (x, y), (pos[0], max_x), spacing, 
+                                              (x, y), (pos[0], max_x),
                                               font, color)
         images.append(np.array(img))
     return images, (x, y)
@@ -348,7 +352,7 @@ def write_paragraph_to_image(paragraph, img,
 
 
 def write_comment_to_image(comment_body, img, 
-                           pos, width_box, spacing):
+                           pos, width_box):
     x, y = pos
     max_x, max_y = width_box
     color = (255, 255, 255, 1)
@@ -358,10 +362,10 @@ def write_comment_to_image(comment_body, img,
     print(paragraphs)
     for paragraph in paragraphs:
         paragraph_images, end_pos = write_paragraph_to_image(paragraph, img, 
-                                                             (x, y), width_box, spacing, 
-                                                             ft_font, color)
+                                                             (x, y), width_box, 
+                                                             comment_font, color)
         images = images + paragraph_images
-        x, y = pos[0], end_pos[1] + (2 * spacing)
+        x, y = pos[0], end_pos[1] + int(line_spacing * 1.2)
     return images, (x, y)
 
 
@@ -405,35 +409,28 @@ def draw_comment_header_to_image(img, pos,
                                  username, npoints, created_utc, medals):
     draw  = ImageDraw.Draw(img)
     text_color = (255, 255, 255, 1)
-    font  = comment_font
-    font_height = get_text_size(font, 'A')[1]
+    username_color = (22, 210, 252, 1)
 
     x_padding = 10
-    x, y = pos[0], pos[1] - font_height - 25
+    x, y = pos
 
     # write the username above the image
-    username = '/u/' + username
-    username_length = get_text_size(font, username)[0]
-    username_color = (22, 210, 252, 1)
-    draw.text((x, y), username, fill=username_color, font=font)
-    x += username_length + x_padding
+    (x, y) = draw_string_to_image('/u/' + username, img, (x, y), header_font, username_color)[1]
+    x += x_padding
 
     # write the points after the username 
-    points = points_str(npoints)
-    points_length = get_text_size(font, points)[0]
-    draw.text((x, y), points, fill=text_color, font=font)
-    x += points_length + x_padding
+    (x, y) = draw_string_to_image(points_str(npoints), img, (x, y), header_font, text_color)[1]
+    x += x_padding
 
     # write the time duration since comment was posted
-    time_ago = time_ago_str(created_utc)
-    time_ago_length = get_text_size(font, time_ago)[0]
-    draw.text((x, y), time_ago, fill=text_color, font=font)
-    x += time_ago_length + x_padding
+    (x, y) = draw_string_to_image(time_ago_str(created_utc), img, (x, y), header_font, text_color)[1]
+    x += x_padding
+
 
 
 
 def draw_comment_sidebar_to_image(img, pos):
-    x, y = int(pos[0] - 50), int(pos[1])
+    x, y = pos
 
     # load the upvote image, resize, and draw
     upvote_img  = Image.open('./res/upvote.png').convert("RGBA")
@@ -464,8 +461,8 @@ def draw_comment_footer_to_image(img, pos):
     cf_img  = Image.open('./res/comment_footer.png').convert("RGBA")
     size = (int(cf_img.width / 2), int(cf_img.height / 2))
     cf_img  = cf_img.resize(size)
-    pos  = (int(x), int(y) - 10) # huh? why need?
-    img.paste(cf_img, pos, cf_img)
+    img.paste(cf_img, (x, y), cf_img)
+    return (x, y + cf_img.height + 10)
 
 
 
@@ -473,22 +470,27 @@ def draw_comment_footer_to_image(img, pos):
 def create_comment_frames(comment, img, start):
 
     end = (text_width_cutoff, text_height_cutoff)
-    spacing = get_text_size(comment_font, 'A')[1] * 1.7
     color = (255, 255, 255, 1)
 
-    draw_comment_sidebar_to_image(img, start)
-    draw_comment_header_to_image(img, start, comment['author'], comment['score'], 
+    x, y = start
+    sidebar_pos = x - 50, y - 40
+    header_pos  = x,      y - 60
+
+    draw_comment_sidebar_to_image(img, sidebar_pos)
+    draw_comment_header_to_image(img, header_pos, comment['author'], comment['score'], 
                                  comment['created_utc'], '')
 
     frames, text_end = write_comment_to_image(comment['body'], img, 
-                                              start, end, spacing)
+                                              (x, y), end)
+    footer_pos  = x, text_end[1] - 10
 
     # draw comment footer to last frame
     last_img = Image.fromarray(frames[-1])
-    draw_comment_footer_to_image(img, text_end)
-    frames[-1] = np.array(last_img)
+    (x, y) = draw_comment_footer_to_image(last_img, text_end)
+    #frames[-1] = np.array(last_img)
 
-    return frames, img, text_end
+    #return frames, last_img, text_end
+    return frames[:-1] + [np.array(last_img)], last_img, (x, y)
 
 
 
@@ -543,6 +545,7 @@ def create_comment_video(comment, img, start, comment_n):
 
     cv2_frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
 
+    print('len(cv2_frames) = {len(cv2_frames)}, len(durations) = {len(durations)}')
     for frame, duration in list(zip(cv2_frames, durations)):
         for _ in range(int(fps * duration * magic_audio_constant)):
             out.write(frame)
