@@ -18,16 +18,16 @@ import numpy as np
 import cv2
 import subprocess
 
-height, width = 1080, 1920 
-aspect = float(width / height)
+screen_height, screen_width = 1080, 1920 
+aspect = float(screen_width / screen_height)
 fps = 30
 background_color = (26, 26, 27, 0)
 
-text_width_cutoff = width * 0.96
-text_start_x  = width - text_width_cutoff
+text_width_cutoff = screen_width * 0.96
+text_start_x  = screen_width - text_width_cutoff
 
-text_height_cutoff = height * 0.90
-text_start_y  = height - text_height_cutoff
+text_height_cutoff = screen_height * 0.90
+text_start_y  = screen_height - text_height_cutoff
 
 title_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
 title_font_size = 92
@@ -45,9 +45,9 @@ comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
 comment_font_color = (255, 255, 255)
 
 ft_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
-ft_font_sz = 24
+ft_font_sz = 40
 ft_font.set_char_size(ft_font_sz * 64)
-ft_font.load_char('A', freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)
+ft_font.load_char('A')
 ft_font_height = ft_font.height >> 6
 
 base_dir    = '/home/anon/Videos/automate-yt'
@@ -204,8 +204,8 @@ def get_text_size_freetype(text, face):
     slot = face.glyph
     # First pass to compute bbox
     width, height, baseline = 0, 0, 0
-    previous = chr(0)
-    for c in enumerate(text):
+    previous = 'a'
+    for i, c in enumerate(text):
         face.load_char(c)
         bitmap = slot.bitmap
         height = max(height,
@@ -230,9 +230,7 @@ def wrap_text(text, max_width, font, starting_x):
     words = text.split(' ')
 
     for word in words:
-        text_width, text_height = get_text_size(font, line + ' ' + word)
-        #text_width, _, _ = get_text_size_freetype(line + ' ' + word, font)
-
+        text_width = get_text_size_freetype(line + ' ' + word, font)[0]
         if starting_x + text_width < max_width:
             line += ' ' + word
         else:
@@ -246,46 +244,47 @@ def wrap_text(text, max_width, font, starting_x):
     return [line for line in wrapped_text if line != '']
 
 
+
+def draw_bitmap_to_image(bitmap, img, pos):
+    x, y = int(pos[0]), int(pos[1])
+    x_max = x + bitmap.width
+    y_max = y + bitmap.rows
+    for p, i in enumerate(range(x, x_max)):
+        for q, j in enumerate(range(y, y_max)):
+            if i < 0 or j < 0 or i >= img.width or j >= img.height:
+                continue;
+            pixel = img.getpixel((i, j))
+            pixel |= int(bitmap.buffer[q * bitmap.width + p])
+            img.putpixel((i, j), pixel)
+
+
 # draws endlessly to the right with no logic otherwise
 def draw_string_onto_image(string, img, pos, font, color):
-#    pen = freetype.FT_Vector(int(pos[0]) * 64, int(pos[1]) * 64)
-#    img_draw = ImageDraw.Draw(img)
-#    spacing = 0
-    x, y = 0, 0
-    previous = chr(0)
+
+    x, y = int(pos[0]), int(pos[1])
+    slot = font.glyph
+    previous = 0
     width, height, baseline = get_text_size_freetype(string, font)
-    Z = numpy.zeros((height, width), dtype=numpy.ubyte)
+
     for c in string:
-#        font.load_char(c, freetype.FT_LOAD_RENDER | freetype.FT_LOAD_TARGET_MONO)
-#        c_height = font.height >> 6
-#        bitmap = font.glyph.bitmap
-#        bitmap_data = bitmap.buffer
-#        draw_x = pen.x >> 6
-#        draw_y = (pen.y - font.glyph.bitmap_top) >> 6
-#        c_img = Image.new("L", (bitmap.width, bitmap.rows), 0)
-#        draw = ImageDraw.Draw(img)
-#        Z = numpy.zeros((
-#        for _x in range(bitmap.width):
-#            for _y in range(bitmap.rows):
-#                value = bitmap_data[_y * bitmap.pitch + _x // 8]
-#                if value & (0x80 >> (_x % 8)):
-#                    draw_point_x = draw_x + _x
-#                    draw_point_y = draw_y + (line_height - c_height) + _y
-#                    draw.point((draw_point_x, draw_point_y), 255)
-#        c_img.convert("RGBA")
-#        img.paste(c_img, (draw_x, draw_y), c_img)
-#        pen.x += font.glyph.advance.x + spacing
         font.load_char(c)
-        bitmap = slot.bitmap
-        top, left = slot.bitmap_top, slot.bitmap_left
-        w, h = bitmap.width, bitmap.rows
-        y = height - baseline - top
-        kerning = font.get_kerning(previous, c)
-        x += (kerning.x >> 6)
-        Z[y:y+h,x:x+w] += numpy.array(bitmap.buffer, dtype='ubyte').reshape(h, w)
-        x += (slot.advance.x >> 6)
+        bitmap = font.glyph.bitmap
+
+        c_img = Image.new("L", (bitmap.width, bitmap.rows), 0)
+        draw_bitmap_to_image(bitmap, c_img, (0, 0))
+        c_img.convert("RGBA")
+
+        draw_x = x + font.glyph.bitmap_left
+        draw_y = y + height - baseline - font.glyph.bitmap_top
+        img.paste(c_img, (draw_x, draw_y), c_img)
+
+        advance = font.glyph.advance.x >> 6
+        kerning = font.get_kerning(previous, c).x >> 6
+        x += advance + kerning
+
         previous = c
-    return img
+
+    return img, (x, y)
 
     
 
@@ -303,42 +302,29 @@ def write_sentence_to_image(text, img,
     start_x, end_x = width_box
     end_padding = 10
 
-    text_width, text_height = get_text_size(font, text)
+    text_width = get_text_size_freetype(text, font)[0]
     if pos[0] + text_width > int(end_x * 0.9):
         lines = wrap_text(text, end_x - start_x, font, pos[0])
     else:
         lines = [text]
 
-#    text_width = get_text_size_freetype(text, font)[0]
-#    if pos[0] + text_width > int(end_x * 0.9):
-#        lines = wrap_text(text, end_x - start_x, font, pos[0])
-#    else:
-#        lines = [text]
-
     x, y = pos
     last_y = y
 
-    draw.text((x, y), lines[0], fill=color, font=font, tier='freetype', method='antialias')
-    line_width, line_height = get_text_size(font, lines[0])
-
-    # must multiply font size by 64 as freetype font size is 1/64th of a point
-#    draw_string_onto_image(lines[0], img, pos, ft_font, color)
-#    line_width = get_text_size_freetype(lines[0], font)[0]
+    img, (x, y) = draw_string_onto_image(lines[0], img, (x, y), ft_font, color)
+    line_width = get_text_size_freetype(lines[0], font)[0]
 
     if len(lines) == 1:
-        return img, (pos[0] + line_width + end_padding, y)
+        return img, (x, y)
 
     y += spacing
 
     for n, line in enumerate(lines[1:]):
-        #        draw_string_onto_image(lines[0], img, pos, ft_font, color)
-        #        line_width = get_text_size_freetype(line, font)[0]
-        draw.text((start_x, y), line, fill=color, font=font, tier='freetype', method='antialias')
-        line_width, line_height = get_text_size(font, line)
+        img, (x, y) = draw_string_onto_image(line, img, (start_x, y), ft_font, color)
         last_y = y
         y += spacing
 
-    return img, (start_x + line_width + end_padding, last_y)
+    return img, (x, last_y)
 
 
 
@@ -373,7 +359,7 @@ def write_comment_to_image(comment_body, img,
     for paragraph in paragraphs:
         paragraph_images, end_pos = write_paragraph_to_image(paragraph, img, 
                                                              (x, y), width_box, spacing, 
-                                                             comment_font, color)
+                                                             ft_font, color)
         images = images + paragraph_images
         x, y = pos[0], end_pos[1] + (2 * spacing)
     return images, (x, y)
@@ -467,7 +453,7 @@ def draw_comment_sidebar_to_image(img, pos):
     draw = ImageDraw.Draw(img)
     line_color = (40, 40, 40, 1)
     x_offset = upvote_size[0] / 2
-    line_start, line_end = (x + x_offset, y + 100), (x + x_offset, height)
+    line_start, line_end = (x + x_offset, y + 100), (x + x_offset, screen_height)
     draw.line([line_start, line_end], fill=line_color, width=5)
 
 
@@ -548,7 +534,7 @@ get_file_name_for_comment = lambda n: comment_video_name_base + str(n) + '.mp4'
 # returns the img given, in case this comment is part of a tree
 def create_comment_video(comment, img, start, comment_n):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out    = cv2.VideoWriter(os.path.join(temp_dir, video_name), fourcc, fps, (width, height))
+    out    = cv2.VideoWriter(os.path.join(temp_dir, video_name), fourcc, fps, (screen_width, screen_height))
 
     comment['body'] = strip_newlines(comment['body'])
 
@@ -573,7 +559,7 @@ def create_comment_video(comment, img, start, comment_n):
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment):
-    img = Image.new("RGBA", (width, height), background_color)
+    img = Image.new("RGBA", (screen_width, screen_height), background_color)
     comment_n = 0
     file_names = []
 
