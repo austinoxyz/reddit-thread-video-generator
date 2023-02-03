@@ -24,8 +24,6 @@ fps = 30
 background_color = (26, 26, 27, 0)
 
 
-
-
 text_width_cutoff = int(screen_width * 0.96)
 text_start_x  = screen_width - text_width_cutoff
 
@@ -47,7 +45,11 @@ magic_spacing_coefficient = 1.2
 line_spacing = int((comment_font.height >> 6) * magic_spacing_coefficient)
 
 
+indentation_offset = 50, 80
 
+sidebar_offset = -50, -30
+header_offset  =   0, -50
+footer_offset  =   0, -10
 
 upvote_img  = Image.open('./res/upvote.png').convert("RGBA")
 upvote_size = (int(upvote_img.width / 5), int(upvote_img.height / 5))
@@ -102,6 +104,12 @@ acronym_map = {
     'NTA': 'not the asshole',          'nta': 'not the asshole',
 }
 
+def replace_acronyms(text):
+    words = re.findall(r'\b\w+\b', text)
+    pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
+    return re.sub(pattern, lambda x: acronym_map[x.group()], text)
+
+
 def load_top_posts_and_best_comments(subreddit_name):
     reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
                          client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
@@ -110,6 +118,7 @@ def load_top_posts_and_best_comments(subreddit_name):
     posts = subreddit.top(limit=10, time_filter='all')
     post_data = []
     for post in posts:
+        print(f"Saving top ten comments from post titled: {post.title}")
         comments = [comment for comment in post.comments.list() 
                     if not isinstance(comment, MoreComments)]
         comments.sort(key=lambda x: x.score, reverse=True)
@@ -160,51 +169,28 @@ def load_top_posts_and_best_comments(subreddit_name):
     with codecs.open('posts.json', 'w', 'utf-8') as json_file:
         json.dump(post_data, json_file)
 
+
 def get_paragraphs(content):
-    return [s for s in re.split("(\n)+", content) if len(s) > 0]
+    return [s for s in content.split("\n") if s]
 
+# TODO split on "..." as well
 def get_sentences(content):
-    return [s.strip() + '.' for s in re.split("[!?.]", content) if len(s) > 1]
+    return [s.strip() + (content[content.find(s)+len(s)]) 
+            for s in re.split("[!?.]", content) if s]
 
-def replace_acronyms(text):
-    words = re.findall(r'\b\w+\b', text)
-    pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
-    return re.sub(pattern, lambda x: acronym_map[x.group()], text)
 
-def strip_newlines(text):
-    return text.replace('\n', '')
-
-def strip_excess_newlines(text):
-    pattern = r'(\n)+'
-    return re.sub(pattern, '\n', text)
-
-def insert_spaces_after_sentences(paragraph):
-    result = ''
-    for i in range(len(paragraph)):
-        char = paragraph[i]
-        result += char
-        if char == '.' and (i + 1 >= len(paragraph) or paragraph[i + 1] != ' '):
-            result += ' '
-    return result
-
-def cleanup_paragraphs(paragraphs):
-    # go through the list and join together all adjacent paragraphs 
-    # that have two sentences or less.
-    result = []
-    joined_paragraph = ''
+def compute_comment_body_height(comment_body, font, width_box):
+    height = 0
+    x, y = 0, 0
+    font_height = font.height >> 6
+    paragraphs = get_paragraphs(comment_body)
     for paragraph in paragraphs:
         sentences = get_sentences(paragraph)
-        if len(sentences) < 2:
-            joined_pargraph += paragraph
-        else:
-            result.append(joined_paragraph)
-            result.append(paragraph)
-    return [insert_spaces_after_sentences(p) for p in result if p != '']
+        #print(paragraph)
+        lines = wrap_text(paragraph, width_box, font, (width_box[0], 0))
+        height += len(lines) * (font_height + line_spacing)
+        (x, y) = x, y + int(line_spacing * 1.2)
 
-
-
-
-def compute_comment_height(comment_body, font, indentation_level):
     return False
 
 
@@ -319,7 +305,7 @@ def write_sentence_to_image(text, img,
                             pos, width_box,
                             font, color):
 
-    print(f"Drawing sentence:    {text}")
+    print(f"[DRAW   SENTENCE]: {text}")
 
     x, y = pos
     start_x, end_x = width_box
@@ -354,11 +340,6 @@ def write_sentence_to_image(text, img,
 def write_paragraph_to_image(paragraph, img, 
                              pos, width_box,
                              font, color):
-    # for debug
-    if len(paragraph) >= 64:
-        print(f"Drawing paragraph:    {paragraph[:64]}...")
-    else:
-        print(f"Drawing paragraph:    {paragraph}...")
 
     x, y  = pos
     max_x, max_y = width_box
@@ -379,15 +360,21 @@ def write_comment_to_image(comment_body, img,
     x, y = pos
     max_x, max_y = width_box
     color = (255, 255, 255, 1)
+    print("[START WRITE COMMENT]")
+    print(f"Body: {comment_body}", end='\n\n')
     paragraphs = get_paragraphs(comment_body)
-    paragraphs = cleanup_paragraphs(paragraphs)
+    print(f"Paragraphs({len(paragraphs)}): {paragraphs}", end='\n\n')
     frames = []
     for paragraph in paragraphs:
+        print("[START PARAGRAPH]")
         paragraph_frames, end_pos = write_paragraph_to_image(paragraph, img, 
                                                              (x, y), width_box, 
                                                              comment_font, color)
+        print("[END   PARAGRAPH]")
+
         frames = frames + paragraph_frames
         x, y = pos[0], end_pos[1] + int(line_spacing * 1.2)
+    print("[END   WRITE COMMENT]")
     return frames, (x, y)
 
 
@@ -481,24 +468,22 @@ def create_comment_frames(comment, img, start):
     color = (255, 255, 255, 1)
 
     x, y = start
-    sidebar_pos = x - 50, y - 30
-    header_pos  = x,      y - 50
 
+    sidebar_pos = x + sidebar_offset[0], y + sidebar_offset[1]
     draw_comment_sidebar_to_image(img, sidebar_pos)
+
+    header_pos = x + header_offset[0], y + header_offset[1]
     draw_comment_header_to_image(img, header_pos, comment['author'], comment['score'], 
                                  comment['created_utc'], '')
 
-    frames, text_end = write_comment_to_image(comment['body'], img, (x, y), end)
-    footer_pos  = x, text_end[1] - 10
+    frames, (x, y) = write_comment_to_image(comment['body'], img, (x, y), end)
 
     # draw comment footer to last frame
-    (x, y) = draw_comment_footer_to_image(img, text_end)
+    footer_pos  = x + footer_offset[0], y + footer_offset[1]
+    (x, y) = draw_comment_footer_to_image(img, (x, y))
     frames[-1] = np.array(img)
     return frames, img, (x, y)
-    #frames[-1] = np.array(last_img)
 
-    #return frames, last_img, text_end
-    #return frames[:-1] + [np.array(last_img)], last_img, (x, y)
 
 
 
@@ -543,14 +528,14 @@ def create_comment_video(comment, img, start, comment_n):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
 
-    comment['body'] = strip_newlines(comment['body'])
+    #comment['body'] = strip_newlines(comment['body'])
 
     durations        = create_comment_audio(comment['body'])
     frames, img, end = create_comment_frames(comment, img, start)
 
     frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
 
-    print(f"len(frames) = {len(frames)}, len(durations) = {len(durations)}")
+    print(f"len(frames) = {len(frames)}\nlen(durations) = {len(durations)}")
     for frame, duration in list(zip(frames, durations)):
         for _ in range(int(fps * duration * magic_audio_constant)):
             out.write(frame)
@@ -559,14 +544,15 @@ def create_comment_video(comment, img, start, comment_n):
     cv2.destroyAllWindows()
 
     comment_video_name = comment_video_name_base + str(comment_n) + '.mp4'
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{comment_video_name}", shell=True, timeout=120)
-
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{comment_video_name} > /dev/null 2>&1", shell=True, timeout=120)
+    print(f"[VIDEO CREATED   ]: {comment_video_name}")
     return img, end, comment_video_name
 
     
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment, chain_n):
+
     img = Image.new("RGBA", (screen_width, screen_height), background_color)
     comment_n = 0
     file_names = []
@@ -574,14 +560,14 @@ def create_comment_chain_video(comment, chain_n):
     # TODO this is temporary. Must preprocess comment chain and compute total comment height
     # for each comment beforehand, and loop through the "comment structure" 
     # given by `comment` argument to the function, keeping track of 
-    pos = (text_start_x, text_start_y)
-    img, end, file_name = create_comment_video(comment, img, pos, comment_n)
+    (x, y) = (text_start_x, text_start_y)
+    img, end, file_name = create_comment_video(comment, img, (x, y), comment_n)
     comment_n += 1
     file_names.append(file_name)
 
     # TODO temporary read above
-    pos = end[0] + 50, end[1] + 80
-    img, end, file_name = create_comment_video(comment['replies'][0], img, pos, comment_n)
+    (x, y) = end[0] + indentation_offset[0], end[1] + indentation_offset[1]
+    img, end, file_name = create_comment_video(comment['replies'][0], img, (x, y), comment_n)
     comment_n += 1
     file_names.append(file_name)
     
@@ -591,7 +577,7 @@ def create_comment_chain_video(comment, chain_n):
         for file_name in file_names:
             f.write('file \'' + file_name + '\'\n')
 
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
 
     return out_file_name
 
@@ -618,6 +604,7 @@ if __name__ == '__main__':
     #load_top_posts_and_best_comments('AmItheAsshole')
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
+    #compute_comment_body_height(posts[0]["comments"][0]["body"], comment_font, (text_start_x, text_start_y))
     create_comment_chain_video(posts[0]["comments"][0], 1)
     #create_final_video(posts[0]["comments"][:2])
 
