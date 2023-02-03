@@ -529,7 +529,7 @@ def create_comment_video(comment, img, start, comment_n):
     print(f"len(frames) = {len(frames)}\nlen(durations) = {len(durations)}")
     for frame, duration in list(zip(frames, durations)):
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-        for _ in range(fps * duration):
+        for _ in range(int(fps * duration)):
             out.write(cv2_frame)
 
     out.release()
@@ -573,11 +573,14 @@ def compute_line_height(comment, width_box):
     start_x0, end_x = width_box
     start_x1 = start_x0 + indentation_offset
     start_x2 = start_x1 + indentation_offset
+    correction = (upvote_img.height + downvote_img.height) 
     height = compute_comment_body_height(comment['body'], width_box)
     for reply1 in comment['replies']:
-        height += compute_total_comment_height(reply1['body'], (start_x1, end_x))
+        r1_height = compute_total_comment_height(reply1['body'], (start_x1, end_x))
+        height += r1_height - correction
         for reply2 in comment['replies']:
-            height += compute_total_comment_height(reply2['body'], (start_x2, end_x))
+            r2_height = compute_total_comment_height(reply2['body'], (start_x2, end_x))
+            height += r2_height - correction
     return height
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
