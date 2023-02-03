@@ -73,25 +73,20 @@ footer_img  = footer_img.resize(size)
 footer_padding = footer_img.height + 10
 
 
-
-#base_dir    = '/home/anon/Videos/automate-yt/'
-#temp_dir    = base_dir + 'tmp/'
-#working_dir = base_dir + 'working/'
-
 temp_dir    = 'tmp/'
 working_dir = 'build-vid/'
-
-na_video_name  = 'audioless_video.mp4'
-audio_name  = 'audio.mp3'
-
-file_names_txt_file = working_dir + 'comment_videos.txt'
 
 comment_video_name_base = 'comment'
 chain_video_name_base = 'chain'
 
-static_video_name = 'static.mp4'
+file_names_txt_file = working_dir + 'comment_videos.txt'
 
+na_video_name  = 'audioless_video.mp4'
+audio_name  = 'audio.mp3'
+static_video_name = 'static.mp4'
 final_video_name = 'final.mp4'
+
+
 
 acronym_map = {
     'OP': 'oh pee',                    'op': 'oh pee',
