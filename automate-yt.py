@@ -21,10 +21,6 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import subprocess
 
-import matplotlib
-import matplotlib.pyplot as plt
-matplotlib.use("TkAgg")
-
 
 screen_height, screen_width = 1080, 1920 
 aspect = float(screen_width / screen_height)
@@ -96,9 +92,6 @@ chain_video_name_base = 'chain'
 static_video_name = 'static.mp4'
 
 final_video_name = 'final.mp4'
-
-# for syncing each audio file to its respective frame
-magic_audio_constant = 1
 
 acronym_map = {
     'OP': 'oh pee',                    'op': 'oh pee',
@@ -536,11 +529,7 @@ def create_comment_video(comment, img, start, comment_n):
     print(f"len(frames) = {len(frames)}\nlen(durations) = {len(durations)}")
     for frame, duration in list(zip(frames, durations)):
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-        #plt.imshow(frame)
-        #plt.show()
-        print(duration)
-        n = int(fps * duration * magic_audio_constant)
-        for _ in range(n):
+        for _ in range(fps * duration):
             out.write(cv2_frame)
 
     out.release()
