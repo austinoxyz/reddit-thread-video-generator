@@ -263,25 +263,16 @@ def draw_bitmap_to_image(bitmap, img, pos, color):
             if i < 0 or j < 0 or i >= img.width or j >= img.height:
                 continue;
 
-            #pixel = img.getpixel((i, j))
-            #pixel |= int(bitmap.buffer[q * bitmap.width + p])
-            #img.putpixel((i, j), pixel)
-
             f = int(bitmap.buffer[q * bitmap.width + p]) # intensity
             a = int(color[3] * 255)
             r = int(f * color[0] * a / (255 * 255))
             g = int(f * color[1] * a / (255 * 255))
             b = int(f * color[2] * a / (255 * 255))
 
-            pixel = img.getpixel((i, j))
-            #pixel[0] |= r
-            #pixel[1] |= g
-            #pixel[2] |= b
-            #img.putpixel((i, j), pixel)
-            new_pixel = pixel[0] | r, pixel[1] | g, pixel[2] | b, a
-            img.putpixel((i, j), new_pixel)
-            
-
+            if f > 32:
+                pixel = img.getpixel((i, j))
+                new_pixel = pixel[0] | r, pixel[1] | g, pixel[2] | b, a
+                img.putpixel((i, j), new_pixel)
 
 
 
@@ -297,17 +288,12 @@ def draw_string_to_image(string, img, pos, font, color):
         font.load_char(c)
         bitmap = font.glyph.bitmap
 
-        #c_img = Image.new("L", (bitmap.width, bitmap.rows), 0)
         c_img = Image.new("RGBA", (bitmap.width, bitmap.rows), 0)
-        draw_bitmap_to_image(bitmap, c_img, (0, 0), (255, 0, 0, 1))
-        c_img.convert("RGBA")
+        draw_bitmap_to_image(bitmap, c_img, (0, 0), color)
 
         draw_x = x + font.glyph.bitmap_left
         draw_y = y + height - baseline - font.glyph.bitmap_top 
-
         img.paste(c_img, (draw_x, draw_y), c_img)
-        #img.paste(c_img, (draw_x, draw_y))
-
 
         advance = font.glyph.advance.x >> 6
         kerning = font.get_kerning(previous, c).x >> 6
