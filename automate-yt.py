@@ -23,29 +23,21 @@ aspect = float(screen_width / screen_height)
 fps = 30
 background_color = (26, 26, 27, 0)
 
+
+
+
 text_width_cutoff = int(screen_width * 0.96)
 text_start_x  = screen_width - text_width_cutoff
 
 text_height_cutoff = int(screen_height * 0.90)
 text_start_y  = screen_height - text_height_cutoff
 
-
-
-
-#comment_font_path = os.path.join("/usr/share/fonts/truetype", "iosevka/iosevka.ttc")
-#comment_font_path = os.path.join("/usr/share/fonts/truetype", "noto/NotoSansMono-Bold.ttf")
-#comment_font_size = 24
-#comment_font = ImageFont.truetype(comment_font_path, comment_font_size)
-#comment_font_color = (255, 255, 255)
-
 comment_font = freetype.Face('./Roboto-Regular.ttf')
-#comment_font = freetype.Face('/usr/share/fonts/truetype/quicksand/Quicksand-Bold.ttf')
 comment_font_sz = 32
 comment_font.set_char_size(comment_font_sz * 64)
 comment_font.load_char('A')
 comment_font_height = comment_font.height >> 6
 
-#header_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
 header_font = freetype.Face('./Roboto-Regular.ttf')
 header_font_sz = 24
 header_font.set_char_size(header_font_sz * 64)
@@ -53,6 +45,8 @@ header_font.load_char('A')
 
 magic_spacing_coefficient = 1.2
 line_spacing = int((comment_font.height >> 6) * magic_spacing_coefficient)
+
+
 
 
 upvote_img  = Image.open('./res/upvote.png').convert("RGBA")
@@ -68,12 +62,25 @@ size = (int(footer_img.width / 2), int(footer_img.height / 2))
 footer_img  = footer_img.resize(size)
 
 
-base_dir    = '/home/anon/Videos/automate-yt'
-temp_dir    = base_dir + '/tmp'
-video_name  = 'audioless_video.mp4'
+
+
+#base_dir    = '/home/anon/Videos/automate-yt/'
+#temp_dir    = base_dir + 'tmp/'
+#working_dir = base_dir + 'working/'
+
+temp_dir    = 'tmp/'
+working_dir = 'build-vid/'
+
+na_video_name  = 'audioless_video.mp4'
 audio_name  = 'audio.mp3'
-working_dir = base_dir + '/working'
+
+file_names_txt_file = working_dir + 'comment_videos.txt'
+
 comment_video_name_base = 'comment'
+chain_video_name_base = 'chain'
+
+static_video_name = 'static.mp4'
+
 final_video_name = 'final.mp4'
 
 # for syncing each audio file to its respective frame
@@ -112,7 +119,6 @@ def load_top_posts_and_best_comments(subreddit_name):
             # not sure why this is happening to the last comment in the list
             if comment.author is None:
                 continue
-            print(comment.author.name)
             subcomments = [subcomment for subcomment in comment.replies.list() 
                         if not isinstance(subcomment, MoreComments)]
             subcomments.sort(key=lambda x: x.score, reverse=True)
@@ -122,7 +128,6 @@ def load_top_posts_and_best_comments(subreddit_name):
                 # not sure why this is happening to the last comment in the list
                 if subcomment.author is None:
                     continue
-                print(subcomment.author.name)
                 subcomments_data.append({
                     'author': subcomment.author.name,
                     'score':  subcomment.score,
@@ -314,6 +319,8 @@ def write_sentence_to_image(text, img,
                             pos, width_box,
                             font, color):
 
+    print(f"Drawing sentence:    {text}")
+
     x, y = pos
     start_x, end_x = width_box
     last_y = y
@@ -347,17 +354,22 @@ def write_sentence_to_image(text, img,
 def write_paragraph_to_image(paragraph, img, 
                              pos, width_box,
                              font, color):
+    # for debug
+    if len(paragraph) >= 64:
+        print(f"Drawing paragraph:    {paragraph[:64]}...")
+    else:
+        print(f"Drawing paragraph:    {paragraph}...")
+
     x, y  = pos
     max_x, max_y = width_box
-    images = []
+    frames = []
     sentences = get_sentences(paragraph)
-    print(sentences)
     for sentence in sentences:
         img, (x, y) = write_sentence_to_image(sentence, img, 
                                               (x, y), (pos[0], max_x),
                                               font, color)
-        images.append(np.array(img))
-    return images, (x, y)
+        frames.append(np.array(img))
+    return frames, (x, y)
 
 
 
@@ -369,15 +381,14 @@ def write_comment_to_image(comment_body, img,
     color = (255, 255, 255, 1)
     paragraphs = get_paragraphs(comment_body)
     paragraphs = cleanup_paragraphs(paragraphs)
-    images = []
-    print(paragraphs)
+    frames = []
     for paragraph in paragraphs:
-        paragraph_images, end_pos = write_paragraph_to_image(paragraph, img, 
+        paragraph_frames, end_pos = write_paragraph_to_image(paragraph, img, 
                                                              (x, y), width_box, 
                                                              comment_font, color)
-        images = images + paragraph_images
+        frames = frames + paragraph_frames
         x, y = pos[0], end_pos[1] + int(line_spacing * 1.2)
-    return images, (x, y)
+    return frames, (x, y)
 
 
 
@@ -477,17 +488,17 @@ def create_comment_frames(comment, img, start):
     draw_comment_header_to_image(img, header_pos, comment['author'], comment['score'], 
                                  comment['created_utc'], '')
 
-    frames, text_end = write_comment_to_image(comment['body'], img, 
-                                              (x, y), end)
+    frames, text_end = write_comment_to_image(comment['body'], img, (x, y), end)
     footer_pos  = x, text_end[1] - 10
 
     # draw comment footer to last frame
-    last_img = Image.fromarray(frames[-1])
-    (x, y) = draw_comment_footer_to_image(last_img, text_end)
+    (x, y) = draw_comment_footer_to_image(img, text_end)
+    frames[-1] = np.array(img)
+    return frames, img, (x, y)
     #frames[-1] = np.array(last_img)
 
     #return frames, last_img, text_end
-    return frames[:-1] + [np.array(last_img)], last_img, (x, y)
+    #return frames[:-1] + [np.array(last_img)], last_img, (x, y)
 
 
 
@@ -519,9 +530,6 @@ def create_comment_audio(comment_body):
 
 
 
-# used in create_comment_video below
-get_file_name_for_comment = lambda n: comment_video_name_base + str(n) + '.mp4'
-
 # creates audio for each sentence of the comment body with gTTs and combines
 # them into one long mp3 file 
 #
@@ -533,32 +541,32 @@ get_file_name_for_comment = lambda n: comment_video_name_base + str(n) + '.mp4'
 # returns the img given, in case this comment is part of a tree
 def create_comment_video(comment, img, start, comment_n):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out    = cv2.VideoWriter(os.path.join(temp_dir, video_name), fourcc, fps, (screen_width, screen_height))
+    out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
 
     comment['body'] = strip_newlines(comment['body'])
 
     durations        = create_comment_audio(comment['body'])
     frames, img, end = create_comment_frames(comment, img, start)
 
-    cv2_frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
+    frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
 
-    print(f"len(cv2_frames) = {len(cv2_frames)}, len(durations) = {len(durations)}")
-    for frame, duration in list(zip(cv2_frames, durations)):
+    print(f"len(frames) = {len(frames)}, len(durations) = {len(durations)}")
+    for frame, duration in list(zip(frames, durations)):
         for _ in range(int(fps * duration * magic_audio_constant)):
             out.write(frame)
 
     out.release()
     cv2.destroyAllWindows()
 
-    comment_video_name = get_file_name_for_comment(comment_n)
-    subprocess.run(f"ffmpeg -i {temp_dir}/{video_name} -i {temp_dir}/{audio_name} -c copy -map 0:v:0 -map 1:a:0 {working_dir}/{comment_video_name}", shell=True, timeout=120)
+    comment_video_name = comment_video_name_base + str(comment_n) + '.mp4'
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{comment_video_name}", shell=True, timeout=120)
 
     return img, end, comment_video_name
 
     
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
-def create_comment_chain_video(comment):
+def create_comment_chain_video(comment, chain_n):
     img = Image.new("RGBA", (screen_width, screen_height), background_color)
     comment_n = 0
     file_names = []
@@ -569,30 +577,49 @@ def create_comment_chain_video(comment):
     pos = (text_start_x, text_start_y)
     img, end, file_name = create_comment_video(comment, img, pos, comment_n)
     comment_n += 1
-    file_names.append(working_dir + '/' + file_name)
+    file_names.append(file_name)
 
     # TODO temporary read above
     pos = end[0] + 50, end[1] + 80
     img, end, file_name = create_comment_video(comment['replies'][0], img, pos, comment_n)
     comment_n += 1
-    file_names.append(working_dir + '/' + file_name)
-
-    file_names_txt_file = working_dir + '/comment_videos.txt'
+    file_names.append(file_name)
+    
+    out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
 
     with open(file_names_txt_file, 'w') as f:
         for file_name in file_names:
             f.write('file \'' + file_name + '\'\n')
 
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {base_dir}/{final_video_name}", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
 
-    return False
+    return out_file_name
+
+# TODO partially implemented not working
+def create_final_video(comments):
+    chain_n = 0
+    file_names = []
+
+    for comment in comments:
+        chain_file_name = create_comment_chain_video(comment, chain_n)
+        file_names.append(chain_file_name)
+        chain_n += 1
+
+    with open(file_names_txt_file, 'w') as f:
+        for file_name in file_names:
+            f.write('file \'' + file_name + '\'\n')
+            f.write('file \'' + static_video_name + '\'\n')
+
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {working_dir}{out_file_name}", shell=True, timeout=120)
+
 
 
 if __name__ == '__main__':
     #load_top_posts_and_best_comments('AmItheAsshole')
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
-    create_comment_chain_video(posts[0]["comments"][0])
+    create_comment_chain_video(posts[0]["comments"][0], 1)
+    #create_final_video(posts[0]["comments"][:2])
 
 
 
