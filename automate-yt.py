@@ -4,19 +4,27 @@ import os
 import re
 import time
 import datetime
-import textwrap
-import codecs
-import freetype
 
 import praw
-import json
 from praw.models import Redditor, Comment, MoreComments
+
+import json
+import codecs
+
+import freetype
+
 from gtts import gTTS
 from pydub import AudioSegment
-from PIL import Image, ImageDraw, ImageFont
+
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 import cv2
 import subprocess
+
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.use("TkAgg")
+
 
 screen_height, screen_width = 1080, 1920 
 aspect = float(screen_width / screen_height)
@@ -90,7 +98,7 @@ static_video_name = 'static.mp4'
 final_video_name = 'final.mp4'
 
 # for syncing each audio file to its respective frame
-magic_audio_constant = 1.083
+magic_audio_constant = 1
 
 acronym_map = {
     'OP': 'oh pee',                    'op': 'oh pee',
@@ -294,9 +302,9 @@ def write_sentence_to_image(text, img,
                             pos, width_box,
                             font, color):
 
-    print(f"[DRAW   SENTENCE]: {text}")
 
     x, y = pos
+    print(f"[DRAW   SENTENCE] ({(x,y)}): {text}")
     start_x, end_x = width_box
     last_y = y
 
@@ -489,7 +497,7 @@ def create_audio_file(text, file_name):
     audio = AudioSegment.from_file(path, format='mp3')
     duration = audio.duration_seconds
     del audio
-    return int(duration)
+    return duration
 
 def create_comment_audio(comment_body):
     durations, audio_file_names, n = [], [], 1
@@ -522,17 +530,18 @@ def create_comment_video(comment, img, start, comment_n):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
 
-    #comment['body'] = strip_newlines(comment['body'])
-
     durations        = create_comment_audio(comment['body'])
     frames, img, end = create_comment_frames(comment, img, start)
 
-    frames = [cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR) for frame in frames]
-
     print(f"len(frames) = {len(frames)}\nlen(durations) = {len(durations)}")
     for frame, duration in list(zip(frames, durations)):
-        for _ in range(int(fps * duration * magic_audio_constant)):
-            out.write(frame)
+        cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+        #plt.imshow(frame)
+        #plt.show()
+        print(duration)
+        n = int(fps * duration * magic_audio_constant)
+        for _ in range(n):
+            out.write(cv2_frame)
 
     out.release()
     cv2.destroyAllWindows()
