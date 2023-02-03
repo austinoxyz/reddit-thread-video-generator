@@ -45,8 +45,8 @@ comment_font.set_char_size(comment_font_sz * 64)
 comment_font.load_char('A')
 comment_font_height = comment_font.height >> 6
 
-header_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
-#header_font = freetype.Face('./Roboto-Regular.ttf')
+#header_font = freetype.Face('/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf')
+header_font = freetype.Face('./Roboto-Regular.ttf')
 header_font_sz = 24
 header_font.set_char_size(header_font_sz * 64)
 header_font.load_char('A')
@@ -112,6 +112,7 @@ def load_top_posts_and_best_comments(subreddit_name):
             # not sure why this is happening to the last comment in the list
             if comment.author is None:
                 continue
+            print(comment.author.name)
             subcomments = [subcomment for subcomment in comment.replies.list() 
                         if not isinstance(subcomment, MoreComments)]
             subcomments.sort(key=lambda x: x.score, reverse=True)
@@ -121,6 +122,7 @@ def load_top_posts_and_best_comments(subreddit_name):
                 # not sure why this is happening to the last comment in the list
                 if subcomment.author is None:
                     continue
+                print(subcomment.author.name)
                 subcomments_data.append({
                     'author': subcomment.author.name,
                     'score':  subcomment.score,
@@ -197,18 +199,8 @@ def cleanup_paragraphs(paragraphs):
 
 
 
-def cleanup_text_for_video(text):
-    text = text.replace('’', '\'')
-    return text
-
-def cleanup_text_for_audio(text):
-    text = replace_acronyms(text)
-    text = text.replace('’', '\'') # why reddit???
-    return text
-
-
-
-
+def compute_comment_height(comment_body, font, indentation_level):
+    return False
 
 
 
@@ -235,21 +227,24 @@ def get_text_size_freetype(text, face):
 
 
 
-def wrap_text(text, max_width, font, starting_x):
+def wrap_text(text, width_box, font, pos):
 
     wrapped_text = []
     line = ''
-    have_processed_first_line = False
     words = text.split(' ')
+
+    begin = pos[0]
+
+    start_x, end_x = width_box
+    max_width = end_x - start_x
 
     for word in words:
         text_width = get_text_size_freetype(line + ' ' + word, font)[0]
-        if starting_x + text_width < max_width:
+        if begin + text_width < max_width:
             line += ' ' + word
         else:
-            if not have_processed_first_line:
-                have_processed_first_line = True
-                starting_x = text_start_x
+            if len(wrapped_text) == 0:
+                begin = start_x
             wrapped_text.append(line)
             line = word
 
@@ -262,19 +257,32 @@ def draw_bitmap_to_image(bitmap, img, pos, color):
     x, y = pos
     x_max = x + bitmap.width
     y_max = y + bitmap.rows
+
     for p, i in enumerate(range(x, x_max)):
         for q, j in enumerate(range(y, y_max)):
             if i < 0 or j < 0 or i >= img.width or j >= img.height:
                 continue;
-            pixel = img.getpixel((i, j))
-            pixel |= int(bitmap.buffer[q * bitmap.width + p])
-            img.putpixel((i, j), pixel)
+
             #pixel = img.getpixel((i, j))
-            #alpha = int(bitmap.buffer[q * bitmap.width + p])
-            #red   = int(color[0] * alpha / 0xff)
-            #green = int(color[1] * alpha / 0xff)
-            #blue  = int(color[2] * alpha / 0xff)
-            #img.putpixel((i, j), (red, green, blue, color[3]))
+            #pixel |= int(bitmap.buffer[q * bitmap.width + p])
+            #img.putpixel((i, j), pixel)
+
+            f = int(bitmap.buffer[q * bitmap.width + p]) # intensity
+            a = int(color[3] * 255)
+            r = int(f * color[0] * a / (255 * 255))
+            g = int(f * color[1] * a / (255 * 255))
+            b = int(f * color[2] * a / (255 * 255))
+
+            pixel = img.getpixel((i, j))
+            #pixel[0] |= r
+            #pixel[1] |= g
+            #pixel[2] |= b
+            #img.putpixel((i, j), pixel)
+            new_pixel = pixel[0] | r, pixel[1] | g, pixel[2] | b, a
+            img.putpixel((i, j), new_pixel)
+            
+
+
 
 
 # draws endlessly to the right with no logic otherwise
@@ -289,14 +297,17 @@ def draw_string_to_image(string, img, pos, font, color):
         font.load_char(c)
         bitmap = font.glyph.bitmap
 
-        c_img = Image.new("L", (bitmap.width, bitmap.rows), 0)
-        #c_img = Image.new("RGBA", (bitmap.width, bitmap.rows), 0)
+        #c_img = Image.new("L", (bitmap.width, bitmap.rows), 0)
+        c_img = Image.new("RGBA", (bitmap.width, bitmap.rows), 0)
         draw_bitmap_to_image(bitmap, c_img, (0, 0), (255, 0, 0, 1))
         c_img.convert("RGBA")
 
         draw_x = x + font.glyph.bitmap_left
-        draw_y = y + height - baseline - font.glyph.bitmap_top
+        draw_y = y + height - baseline - font.glyph.bitmap_top 
+
         img.paste(c_img, (draw_x, draw_y), c_img)
+        #img.paste(c_img, (draw_x, draw_y))
+
 
         advance = font.glyph.advance.x >> 6
         kerning = font.get_kerning(previous, c).x >> 6
@@ -325,7 +336,7 @@ def write_sentence_to_image(text, img,
     end_padding = 25
 
     if pos[0] + text_width > int(end_x * 0.9):
-        lines = wrap_text(text, end_x - start_x, font, pos[0])
+        lines = wrap_text(text, width_box, font, pos)
     else:
         lines = [text]
 
@@ -496,7 +507,7 @@ def create_comment_frames(comment, img, start):
 
 def create_audio_file(text, file_name):
     path = os.path.join(temp_dir, file_name)
-    text = cleanup_text_for_audio(text)
+    text = replace_acronyms(text)
     tts = gTTS(text=text, lang='en')
     tts.save(os.path.join(temp_dir, file_name))
     audio = AudioSegment.from_file(path, format='mp3')
