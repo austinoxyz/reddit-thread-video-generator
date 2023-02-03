@@ -1,5 +1,6 @@
 tmp/
 build-vid/
 res/
+test/
 posts.json
 posts.pretty.json
