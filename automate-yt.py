@@ -583,16 +583,23 @@ def compute_comment_body_height(comment_body, width_box):
         last_line_width = get_text_size_freetype(lines[-1], comment_font)[0]
         x = start_x + last_line_width + end_padding
 
+    print(comment_body[:10] + '... :' + str(y + line_spacing))
     return y + line_spacing
 
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
     correction = upvote_img.height # subject to change
-    height = compute_comment_body_height(comment['body'], width_box) + header_font.height + -header_offset[1] - correction
+    height = total_comment_height(comment, width_box)
+    #height = compute_comment_body_height(comment['body'], width_box)# - header_offset[1] - correction
+    #height = compute_comment_body_height(comment['body'], width_box) + header_font.height + -header_offset[1] - correction
     if comment.get('replies') is None:
-        return height + footer_offset[1] + footer_padding + comment_end_padding
+        print(f"{-header_offset[1]} + {height} + {footer_offset[1]} - {100} + {comment_end_padding}") 
+        return -header_offset[1] + height + footer_offset[1] - 100 + comment_end_padding 
+    #return -header_offset[1] + height + footer_offset[1] - upvote_img.height - downvote_img.height + footer_img.height + int(comment_end_padding / 2)
     for reply in comment['replies']:
-        height += upvote_img.height + downvote_img.height
+        print(reply['score'])
+        #height += upvote_img.height + downvote_img.height
+        height += 120
         height += compute_line_height(reply, (start_x + indentation_offset, end_x))
     return height
 
@@ -605,7 +612,8 @@ def compute_start_y(comment):
 
 def total_comment_height(comment, width_box):
     body_height = compute_comment_body_height(comment['body'], width_box)
-    return header_font.height + -header_offset[1] + body_height + footer_offset[1] + footer_img.height + comment_end_padding
+    return -header_offset[1] + body_height + footer_offset[1]# + footer_img.height + comment_end_padding
+#return -header_offset[1] + body_height + footer_offset[1] + footer_img.height + comment_end_padding
 
 
 
