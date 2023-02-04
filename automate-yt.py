@@ -21,8 +21,8 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import subprocess
 
-
 screen_height, screen_width = 1080, 1920 
+
 aspect = float(screen_width / screen_height)
 fps = 30
 background_color = (26, 26, 27, 0)
@@ -72,7 +72,6 @@ footer_img  = footer_img.resize(size)
 
 footer_padding = footer_img.height + 10
 
-
 temp_dir    = 'tmp/'
 working_dir = 'build-vid/'
 
@@ -86,10 +85,12 @@ audio_name  = 'audio.mp3'
 static_video_name = 'static.mp4'
 final_video_name = 'final.mp4'
 
+comment_n = 0
 
 
 acronym_map = {
     'OP': 'oh pee',                    'op': 'oh pee',
+    'LOL': 'ell oh ell',               'lol': 'ell oh ell',              'Lol': 'el oh el',
     'IIRC': 'if i recall correctly',   'iirc': 'if i recall correctly',
     'AFAIK': 'as far as i know',       'afaik': 'as far as i know',
     'DAE': 'does anyone else',         'dae': 'does anyone else',
@@ -210,6 +211,15 @@ def create_comment_audio(comment_body):
     return durations
 
 
+def flatten(lst):
+    flattened_list = []
+    for item in lst:
+        if isinstance(item, list):
+            flattened_list.extend(flatten(item))
+        else:
+            flattened_list.append(item)
+    return flattened_list
+
 def get_paragraphs(content):
     return [s for s in content.split("\n") if s]
 
@@ -257,6 +267,11 @@ def wrap_text(text, width_box, font, pos):
     wrapped_text.append(line)
     return [line for line in wrapped_text if line != '']
 
+
+def get_subimage_at_y(img, y, WIDTH, sub_height):
+    image_np = np.array(image)
+    sub_image = image_np[y:y + sub_height, 0:WIDTH, :]
+    return sub_image
 
 
 def draw_bitmap_to_image(bitmap, img, pos, color):
@@ -382,7 +397,6 @@ def write_comment_to_image(comment_body, img,
                                                              (x, y), width_box, 
                                                              comment_font, color)
         LOG('END PARAGRAPH', '')
-
         frames = frames + paragraph_frames
         x, y = pos[0], end[1] + int(line_spacing * 1.2)
     LOG('END WRITE COMMENT', '')
@@ -404,17 +418,17 @@ def time_ago_str(created_utc):
     if time_ago > 31536000:
         n, s = time_ago // 31536000, 'year'
     elif time_ago > 2678400:
-        n, s = time_ago // 2678400, 'month'
+        n, s = time_ago // 2678400,  'month'
     elif time_ago > 604800:
-        n, s = time_ago // 604800, 'week'
+        n, s = time_ago // 604800,   'week'
     elif time_ago > 86400:
-        n, s = time_ago // 86400, 'day'
+        n, s = time_ago // 86400,    'day'
     elif time_ago > 3600:
-        n, s = time_ago // 3600, 'hour'
+        n, s = time_ago // 3600,     'hour'
     elif time_ago > 60:
-        n, s = time_ago // 60, 'minute'
+        n, s = time_ago // 60,       'minute'
     else:
-        n, s = time, 'second'
+        n, s = time,                 'second'
     if n > 1:
         s += 's'
     return str(n) + ' ' + s + ' ago'
@@ -494,7 +508,7 @@ def create_comment_frames(comment, img, start):
     footer_pos  = x + footer_offset[0], y + footer_offset[1]
     (x, y) = draw_comment_footer_to_image(img, (x, y))
     frames[-1] = np.array(img)
-    return frames, img, (x, y)
+    return frames, img, (x, y + comment_end_padding + footer_padding)
 
 
 
@@ -510,12 +524,13 @@ def create_comment_frames(comment, img, start):
 # combines the audioless video and the audio with ffmpeg for a video of just this comment
 # 
 # returns the img given, in case this comment is part of a tree
-def create_comment_video(comment, img, start, comment_n):
+def create_comment_video(comment, img, start):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
+    x, y = start
 
-    durations        = create_comment_audio(comment['body'])
-    frames, img, end = create_comment_frames(comment, img, start)
+    durations           = create_comment_audio(comment['body'])
+    frames, img, (x, y) = create_comment_frames(comment, img, (x, y))
 
     for frame, duration in list(zip(frames, durations)):
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
@@ -525,10 +540,22 @@ def create_comment_video(comment, img, start, comment_n):
     out.release()
     cv2.destroyAllWindows()
 
+    global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+#    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name}", shell=True, timeout=120)
+
     LOG('VIDEO CREATED', out_file_name)
-    return img, end, out_file_name
+    comment_n += 1
+
+    out_file_names = [out_file_name]
+
+    if 'replies' in comment:
+        for reply in comment['replies']:
+            img, (_, y), reply_out_file_names = create_comment_video(reply, img, (x + indentation_offset, y))
+            out_file_names.append(flatten(reply_out_file_names))
+
+    return img, (x, y), flatten(out_file_names)
 
 
 
@@ -558,65 +585,81 @@ def compute_comment_body_height(comment_body, width_box):
 
     return y + line_spacing
 
-def compute_total_comment_height(comment_body, width_box):
-    body_height = compute_comment_body_height(comment_body, width_box)
-    return header_font_height + header_offset[1]  + body_height + footer_offset[1] + footer_padding + comment_end_padding
-
 def compute_line_height(comment, width_box):
-    start_x0, end_x = width_box
-    start_x1 = start_x0 + indentation_offset
-    start_x2 = start_x1 + indentation_offset
-    correction = (upvote_img.height + downvote_img.height) 
-    height = compute_comment_body_height(comment['body'], width_box)
-    for reply1 in comment['replies']:
-        r1_height = compute_total_comment_height(reply1['body'], (start_x1, end_x))
-        height += r1_height - correction
-        for reply2 in comment['replies']:
-            r2_height = compute_total_comment_height(reply2['body'], (start_x2, end_x))
-            height += r2_height - correction
+    start_x, end_x = width_box
+    correction = upvote_img.height # subject to change
+    height = compute_comment_body_height(comment['body'], width_box) + header_font.height + -header_offset[1] - correction
+    if comment.get('replies') is None:
+        return height + footer_offset[1] + footer_padding + comment_end_padding
+    for reply in comment['replies']:
+        height += upvote_img.height + downvote_img.height
+        height += compute_line_height(reply, (start_x + indentation_offset, end_x))
     return height
 
 def compute_start_y(comment):
-    start_x0, end_x = text_start_x, text_width_cutoff
-    start_x1 = start_x0 + indentation_offset
-    start_x2 = start_x1 + indentation_offset
-
-    height = compute_comment_body_height(comment['body'], (start_x0, end_x))
-    for reply1 in comment['replies']:
-        r1_height = compute_total_comment_height(reply1['body'], (start_x1, end_x))
-        height += r1_height
-        for reply2 in comment['replies']:
-            r2_height = compute_total_comment_height(reply2['body'], (start_x2, end_x))
-            height += r2_height
-
+    height = total_comment_height(comment, (text_start_x, text_width_cutoff))
     if height > screen_height:
         return text_start_y
     else:
         return int((screen_height / 2)  - (height / 2))
 
+def total_comment_height(comment, width_box):
+    body_height = compute_comment_body_height(comment['body'], width_box)
+    return header_font.height + -header_offset[1] + body_height + footer_offset[1] + footer_img.height + comment_end_padding
 
 
+
+# if current_y + next_comment.height > image_height:
+
+class MoreRepliesThanDesiredError(Exception):
+    pass
+
+def more_replies_than_desired(comment):
+    if len(comment['replies']) > 3:
+        return True
+    # TODO import more comments with praw
+    #for reply0 in comment['replies']:
+    #    for key in reply0.keys():
+    #        print(key)
+    #    if len(reply0['replies']) > 3:
+    #        return True
+    #    for reply1 in reply0['replies']:
+    #        if len(reply1['replies']) > 0:
+    #            return True
+    return False
+
+def prune_comment_replies(comment):
+    return False
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment, chain_n):
+    if (more_replies_than_desired(comment)):
+        raise MoreRepliesThanDesiredError("too many replies doofus.")
 
     img = Image.new("RGBA", (screen_width, screen_height), background_color)
+
+    global comment_n
     comment_n = 0
-    file_names = []
 
-    # TODO this is temporary. Must preprocess comment chain and compute total comment height
-    # for each comment beforehand, and loop through the "comment structure" 
-    # given by `comment` argument to the function, keeping track of 
-    (x, y) = (text_start_x, compute_start_y(comment))
-    img, end, file_name = create_comment_video(comment, img, (x, y), comment_n)
-    comment_n += 1
-    file_names.append(file_name)
+    #file_names = []
 
-    # TODO temporary read above
-    (x, y) = end[0] + indentation_offset, end[1] + comment_end_padding
-    img, end, file_name = create_comment_video(comment['replies'][0], img, (x, y), comment_n)
-    comment_n += 1
-    file_names.append(file_name)
+    #(x, y) = (text_start_x, compute_start_y(comment))
+    (x, y) = (text_start_x, text_start_y)
+    img, end, file_names = create_comment_video(comment, img, (x, y))
+
+#    # TODO this is temporary. Must preprocess comment chain and compute total comment height
+#    # for each comment beforehand, and loop through the "comment structure" 
+#    # given by `comment` argument to the function, keeping track of 
+#    (x, y) = (text_start_x, compute_start_y(comment))
+#    img, end, file_name = create_comment_video(comment, img, (x, y), comment_n)
+#    comment_n += 1
+#    file_names.append(file_name)
+#
+#    # TODO temporary read above
+#    (x, y) = end[0] + indentation_offset, end[1] + comment_end_padding
+#    img, end, file_name = create_comment_video(comment['replies'][0], img, (x, y), comment_n)
+#    comment_n += 1
+#    file_names.append(file_name)
     
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
 
@@ -624,7 +667,8 @@ def create_comment_chain_video(comment, chain_n):
         for file_name in file_names:
             f.write('file \'' + file_name + '\'\n')
 
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+#    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
 
     return out_file_name
@@ -654,12 +698,13 @@ if __name__ == '__main__':
         posts = json.load(posts_file)
 
     comment = posts[0]["comments"][0]
-    comment['replies'] = [comment['replies'][0]]
-    comment['replies'][0]['replies'] = []
+    #comment['replies'] = [comment['replies'][0]]
+    #comment['replies'] = comment['replies'][:3]
+    #comment['replies'][0]['replies'] = []
 
     width_box = (text_start_x, text_width_cutoff)
     body_height  = compute_comment_body_height(comment['body'], width_box)
-    total_height = compute_total_comment_height(comment['body'], width_box)
+    total_height = total_comment_height(comment, width_box)
     line_height  = compute_line_height(comment, width_box)
 
     create_comment_chain_video(posts[0]["comments"][0], 1)
