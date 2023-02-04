@@ -304,7 +304,6 @@ def draw_string_to_image(string, img, pos, font, color):
         advance = font.glyph.advance.x >> 6
         kerning = font.get_kerning(previous, c).x >> 6
         x += advance + kerning
-
         previous = c
 
     return img, (x, y)
@@ -657,8 +656,6 @@ if __name__ == '__main__':
     comment = posts[0]["comments"][0]
     comment['replies'] = [comment['replies'][0]]
     comment['replies'][0]['replies'] = []
-
-    print(compute_start_y(comment))
 
     width_box = (text_start_x, text_width_cutoff)
     body_height  = compute_comment_body_height(comment['body'], width_box)
