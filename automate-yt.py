@@ -182,6 +182,34 @@ def load_top_posts_and_best_comments(subreddit_name):
         json.dump(post_data, json_file)
 
 
+
+def create_audio_file(text, file_name):
+    path = os.path.join(temp_dir, file_name)
+    text = replace_acronyms(text)
+    tts = gTTS(text=text, lang='en')
+    tts.save(os.path.join(temp_dir, file_name))
+    audio = AudioSegment.from_file(path, format='mp3')
+    duration = audio.duration_seconds
+    del audio
+    return duration
+
+def create_comment_audio(comment_body):
+    durations, audio_file_names, n = [], [], 1
+    paragraphs = get_paragraphs(comment_body)
+    for paragraph in paragraphs:
+        sentences = get_sentences(paragraph)
+        for sentence in sentences:
+            file_name = 'audio' + str(n) + '.mp3'
+            audio_file_names.append(os.path.join(temp_dir, file_name))
+            durations.append(create_audio_file(sentence, file_name))
+            n += 1
+    audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
+    for file_name in audio_file_names[1:]:
+        audio += AudioSegment.from_file(file_name, format='mp3')
+    audio.export(os.path.join(temp_dir, audio_name))
+    return durations
+
+
 def get_paragraphs(content):
     return [s for s in content.split("\n") if s]
 
@@ -191,14 +219,8 @@ def get_sentences(content):
             for s in re.split("[!?.]", content) if s]
 
 
-
-def get_text_size(font, text):
-    bbox = font.getbbox(text)
-    return (bbox[2] - bbox[0], bbox[3] - bbox[1])
-
 def get_text_size_freetype(text, face):
     slot = face.glyph
-    # First pass to compute bbox
     width, height, baseline = 0, 0, 0
     previous = 'a'
     for i, c in enumerate(text):
@@ -213,16 +235,12 @@ def get_text_size_freetype(text, face):
     return width, height, baseline
 
 
-
-
 def wrap_text(text, width_box, font, pos):
-
     wrapped_text = []
     line = ''
     words = text.split(' ')
 
     begin = pos[0]
-
     start_x, end_x = width_box
     max_width = end_x - start_x
 
@@ -301,10 +319,9 @@ def draw_string_to_image(string, img, pos, font, color):
 def write_sentence_to_image(text, img, 
                             pos, width_box,
                             font, color):
-
+    LOG('DRAW SENTENCE', text)
 
     x, y = pos
-    LOG('DRAW SENTENCE', text)
     start_x, end_x = width_box
     last_y = y
 
@@ -350,8 +367,6 @@ def write_paragraph_to_image(paragraph, img,
     return frames, (x, y)
 
 
-
-
 def write_comment_to_image(comment_body, img, 
                            pos, width_box):
     x, y = pos
@@ -373,9 +388,6 @@ def write_comment_to_image(comment_body, img,
         x, y = pos[0], end[1] + int(line_spacing * 1.2)
     LOG('END WRITE COMMENT', '')
     return frames, (x, y)
-
-
-
 
 
 def points_str(npoints):
@@ -488,32 +500,6 @@ def create_comment_frames(comment, img, start):
 
 
 
-def create_audio_file(text, file_name):
-    path = os.path.join(temp_dir, file_name)
-    text = replace_acronyms(text)
-    tts = gTTS(text=text, lang='en')
-    tts.save(os.path.join(temp_dir, file_name))
-    audio = AudioSegment.from_file(path, format='mp3')
-    duration = audio.duration_seconds
-    del audio
-    return duration
-
-def create_comment_audio(comment_body):
-    durations, audio_file_names, n = [], [], 1
-    paragraphs = get_paragraphs(comment_body)
-    for paragraph in paragraphs:
-        sentences = get_sentences(paragraph)
-        for sentence in sentences:
-            file_name = 'audio' + str(n) + '.mp3'
-            audio_file_names.append(os.path.join(temp_dir, file_name))
-            durations.append(create_audio_file(sentence, file_name))
-            n += 1
-    audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
-    for file_name in audio_file_names[1:]:
-        audio += AudioSegment.from_file(file_name, format='mp3')
-    audio.export(os.path.join(temp_dir, audio_name))
-    return durations
-
 
 
 # creates audio for each sentence of the comment body with gTTs and combines
@@ -540,10 +526,13 @@ def create_comment_video(comment, img, start, comment_n):
     out.release()
     cv2.destroyAllWindows()
 
-    comment_video_name = comment_video_name_base + str(comment_n) + '.mp4'
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{comment_video_name} > /dev/null 2>&1", shell=True, timeout=120)
-    LOG('VIDEO CREATED', comment_video_name)
-    return img, end, comment_video_name
+    out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    LOG('VIDEO CREATED', out_file_name)
+    return img, end, out_file_name
+
+
+
 
 def compute_comment_body_height(comment_body, width_box):
     x, y = 0, 0
@@ -588,6 +577,27 @@ def compute_line_height(comment, width_box):
             height += r2_height - correction
     return height
 
+def compute_start_y(comment):
+    start_x0, end_x = text_start_x, text_width_cutoff
+    start_x1 = start_x0 + indentation_offset
+    start_x2 = start_x1 + indentation_offset
+
+    height = compute_comment_body_height(comment['body'], (start_x0, end_x))
+    for reply1 in comment['replies']:
+        r1_height = compute_total_comment_height(reply1['body'], (start_x1, end_x))
+        height += r1_height
+        for reply2 in comment['replies']:
+            r2_height = compute_total_comment_height(reply2['body'], (start_x2, end_x))
+            height += r2_height
+
+    if height > screen_height:
+        return text_start_y
+    else:
+        return int((screen_height / 2)  - (height / 2))
+
+
+
+
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment, chain_n):
 
@@ -598,7 +608,7 @@ def create_comment_chain_video(comment, chain_n):
     # TODO this is temporary. Must preprocess comment chain and compute total comment height
     # for each comment beforehand, and loop through the "comment structure" 
     # given by `comment` argument to the function, keeping track of 
-    (x, y) = (text_start_x, text_start_y)
+    (x, y) = (text_start_x, compute_start_y(comment))
     img, end, file_name = create_comment_video(comment, img, (x, y), comment_n)
     comment_n += 1
     file_names.append(file_name)
@@ -616,8 +626,11 @@ def create_comment_chain_video(comment, chain_n):
             f.write('file \'' + file_name + '\'\n')
 
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    LOG('VIDEO CREATED', out_file_name)
 
     return out_file_name
+
+
 
 # TODO partially implemented not working
 def create_final_video(comments):
@@ -637,10 +650,7 @@ def create_final_video(comments):
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {working_dir}{out_file_name}", shell=True, timeout=120)
 
 
-
 if __name__ == '__main__':
-    #load_top_posts_and_best_comments('AmItheAsshole')
-
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
 
@@ -648,8 +658,10 @@ if __name__ == '__main__':
     comment['replies'] = [comment['replies'][0]]
     comment['replies'][0]['replies'] = []
 
+    print(compute_start_y(comment))
+
     width_box = (text_start_x, text_width_cutoff)
-    body_height  = compute_comment_body_height(comment['body'], width_box )
+    body_height  = compute_comment_body_height(comment['body'], width_box)
     total_height = compute_total_comment_height(comment['body'], width_box)
     line_height  = compute_line_height(comment, width_box)
 
