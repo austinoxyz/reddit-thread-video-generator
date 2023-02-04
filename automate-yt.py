@@ -110,6 +110,18 @@ def replace_acronyms(text):
     return re.sub(pattern, lambda x: acronym_map[x.group()], text)
 
 
+def LOG(title, message):
+    if len(title) > 32:
+        title = title[:32]
+    title = '[' + title + ']'
+    if len(message) > 64:
+        message = message[:64] + '...'
+    print('{:<32}'.format(title), end='')
+    if message:
+        print(f': {message}')
+    else:
+        print('\n', end='')
+
 def load_top_posts_and_best_comments(subreddit_name):
     reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
                          client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
@@ -292,7 +304,7 @@ def write_sentence_to_image(text, img,
 
 
     x, y = pos
-    print(f"[DRAW   SENTENCE] ({(x,y)}): {text}")
+    LOG('DRAW SENTENCE', text)
     start_x, end_x = width_box
     last_y = y
 
@@ -345,21 +357,21 @@ def write_comment_to_image(comment_body, img,
     x, y = pos
     max_x, max_y = width_box
     color = (255, 255, 255, 1)
-    print("[START WRITE COMMENT]")
-    print(f"Body: {comment_body}", end='\n\n')
+    LOG('START WRITE COMMENT', '')
+    LOG(f'BODY', comment_body)
     paragraphs = get_paragraphs(comment_body)
-    print(f"Paragraphs({len(paragraphs)}): {paragraphs}", end='\n\n')
     frames = []
     for paragraph in paragraphs:
-        print("[START PARAGRAPH]")
+        LOG('START PARAGRAPH', '')
+        LOG('BODY', paragraph)
         paragraph_frames, end = write_paragraph_to_image(paragraph, img, 
                                                              (x, y), width_box, 
                                                              comment_font, color)
-        print("[END   PARAGRAPH]")
+        LOG('END PARAGRAPH', '')
 
         frames = frames + paragraph_frames
         x, y = pos[0], end[1] + int(line_spacing * 1.2)
-    print("[END   WRITE COMMENT]")
+    LOG('END WRITE COMMENT', '')
     return frames, (x, y)
 
 
@@ -456,7 +468,6 @@ def create_comment_frames(comment, img, start):
 
     sidebar_pos = x + sidebar_offset[0], y + sidebar_offset[1]
     line_height = compute_line_height(comment, (x, text_width_cutoff))
-    print(line_height)
     draw_comment_sidebar_to_image(img, sidebar_pos, line_height)
 
     header_pos = x + header_offset[0], y + header_offset[1]
@@ -521,7 +532,6 @@ def create_comment_video(comment, img, start, comment_n):
     durations        = create_comment_audio(comment['body'])
     frames, img, end = create_comment_frames(comment, img, start)
 
-    print(f"len(frames) = {len(frames)}\nlen(durations) = {len(durations)}")
     for frame, duration in list(zip(frames, durations)):
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
         for _ in range(int(fps * duration)):
@@ -532,7 +542,7 @@ def create_comment_video(comment, img, start, comment_n):
 
     comment_video_name = comment_video_name_base + str(comment_n) + '.mp4'
     subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{comment_video_name} > /dev/null 2>&1", shell=True, timeout=120)
-    print(f"[VIDEO CREATED   ]: {comment_video_name}")
+    LOG('VIDEO CREATED', comment_video_name)
     return img, end, comment_video_name
 
 def compute_comment_body_height(comment_body, width_box):
@@ -642,7 +652,6 @@ if __name__ == '__main__':
     body_height  = compute_comment_body_height(comment['body'], width_box )
     total_height = compute_total_comment_height(comment['body'], width_box)
     line_height  = compute_line_height(comment, width_box)
-    print(f"body_height: {body_height}, total_height: {total_height}, line_height: {line_height}")
 
     create_comment_chain_video(posts[0]["comments"][0], 1)
     #create_final_video(posts[0]["comments"][:2])
