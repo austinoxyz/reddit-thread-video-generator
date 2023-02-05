@@ -117,7 +117,7 @@ def replace_acronyms(text):
 
 
 
-debug = True
+debug = False
 
 def LOG(title, message, pos=''):
     if len(title) > 32:
@@ -139,7 +139,6 @@ def draw_debug_line(img, y, color):
     draw = ImageDraw.Draw(img)
     dbg_ln_start, dbg_ln_end = (0, y), (screen_width, y)
     draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
-
 
 
 def load_top_posts_and_best_comments(subreddit_name):
@@ -474,6 +473,7 @@ def draw_comment_sidebar_to_image(img, pos, line_height):
     # draw upvote/downvote images
     img.paste(upvote_img, (x, y), upvote_img)
     img.paste(downvote_img, (x, y + 50), downvote_img)
+    print(upvote_img.height, downvote_img.height)
 
     # draw the indentation line
     draw = ImageDraw.Draw(img)
@@ -526,10 +526,6 @@ def create_comment_frames(comment, img, start):
     return frames, img, (x, y + comment_end_pad + footer_pad)
 
 
-
-
-
-
 # creates audio for each sentence of the comment body with gTTs and combines
 # them into one long mp3 file 
 #
@@ -573,8 +569,6 @@ def create_comment_video(comment, img, start):
     return (x, y), flatten(out_file_names)
 
 
-
-
 def compute_comment_body_height(comment_body, width_box):
     start_x, end_x = width_box
     x, y = start_x, 0
@@ -603,15 +597,14 @@ def compute_comment_body_height(comment_body, width_box):
 
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
-    #total_height = compute_total_comment_height(comment, width_box)
     body_height = compute_comment_body_height(comment['body'], width_box)
     height = body_height - downvote_img.height + footer_off + footer_img.height
     if comment.get('replies') is None:
         return height
     for reply in comment['replies']:
-        height += -header_off + downvote_img.height
-        height += compute_line_height(reply, (start_x + indent_off, end_x))
-    return height
+        height += compute_total_comment_height(reply, (start_x + indent_off, end_x))
+    return height - 45
+    #return header_off + compute_total_comment_height(comment, width_box)
 
 def compute_start_y(comment):
     height = compute_total_comment_height(comment, (text_start_x, text_width_cutoff))
@@ -621,8 +614,14 @@ def compute_start_y(comment):
         return int((screen_height / 2)  - (height / 2))
 
 def compute_total_comment_height(comment, width_box):
+    start_x, end_x = width_box
     body_height = compute_comment_body_height(comment['body'], width_box)
-    return -header_off + body_height + footer_off + footer_img.height
+    height =  -header_off + body_height + footer_off + footer_img.height
+    if comment.get('replies') is None:
+        return height
+    for reply in comment['replies']:
+        height += compute_total_comment_height(reply, (start_x + indent_off, end_x))
+    return height
 
 
 
