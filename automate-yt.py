@@ -21,6 +21,14 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import subprocess
 
+# Colors
+RED    = (255, 0, 0, 1)
+GREEN  = (0, 255, 0, 1)
+BLUE   = (0, 0, 255, 1)
+PINK   = (252, 17, 154, 1)
+YELLOW = (252, 248, 22, 1)
+ORANGE = (252, 127, 17, 1)
+MAROON = (68, 2, 2, 1)
 
 # Fonts 
 comment_font = freetype.Face('./Roboto-Regular.ttf')
@@ -70,7 +78,7 @@ sentence_end_pad = 25
 
 indent_off  = 50
 header_off  = -50
-footer_off  = -10
+footer_off  = 0
 sidebar_off = -50, -50
 
 vote_img_pad = 100
@@ -116,6 +124,14 @@ def replace_acronyms(text):
     pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
     return re.sub(pattern, lambda x: acronym_map[x.group()], text)
 
+def flatten(lst):
+    flattened_list = []
+    for item in lst:
+        if isinstance(item, list):
+            flattened_list.extend(flatten(item))
+        else:
+            flattened_list.append(item)
+    return flattened_list
 
 
 debug = True
@@ -235,15 +251,37 @@ def create_comment_audio(comment_body):
     audio.export(os.path.join(temp_dir, audio_name))
     return durations
 
+def points_str(npoints):
+    multiplier = ''
+    if npoints >= 1000000:
+        npoints = npoints // 100000
+        multiplier = 'm'
+    elif npoints >= 1000:
+        npoints = npoints // 1000
+        multiplier = 'k'
+    return str(npoints)[:-1] + '.' + str(npoints)[-1] + multiplier + ' points'
 
-def flatten(lst):
-    flattened_list = []
-    for item in lst:
-        if isinstance(item, list):
-            flattened_list.extend(flatten(item))
-        else:
-            flattened_list.append(item)
-    return flattened_list
+def time_ago_str(created_utc):
+    time_ago = int(time.time()) - int(created_utc)
+    if time_ago > 31536000:
+        n, s = time_ago // 31536000, 'year'
+    elif time_ago > 2678400:
+        n, s = time_ago // 2678400,  'month'
+    elif time_ago > 604800:
+        n, s = time_ago // 604800,   'week'
+    elif time_ago > 86400:
+        n, s = time_ago // 86400,    'day'
+    elif time_ago > 3600:
+        n, s = time_ago // 3600,     'hour'
+    elif time_ago > 60:
+        n, s = time_ago // 60,       'minute'
+    else:
+        n, s = time,                 'second'
+    if n > 1:
+        s += 's'
+    return str(n) + ' ' + s + ' ago'
+
+
 
 def get_paragraphs(content):
     return [s for s in content.split("\n") if s]
@@ -358,6 +396,41 @@ def wrap_text(text, width_box, font, pos):
     wrapped_text.append(line)
     return [line for line in wrapped_text if line != '']
 
+def draw_header(img, pos, username, npoints, created_utc, medals):
+    (x, y) = pos[0], pos[1] + header_off
+    draw  = ImageDraw.Draw(img)
+    draw_debug_line_y(img, y, PINK)
+
+    # write the username above the image
+    username_color = (22, 210, 252, 1)
+    (x, y) = draw_string_to_image('/u/' + username, img, (x, y), header_font, username_color)
+    x += 10
+
+    # write the points and time duration after the username 
+    text_color = (255, 255, 255, 1)
+    string = ' • ' + points_str(npoints) + ' • ' + time_ago_str(created_utc)
+    (x, y) = draw_string_to_image(string, img, (x, y), header_font, text_color)
+
+def draw_sidebar(img, pos, line_height):
+    (x, y) = pos[0] + sidebar_off[0], pos[1] + sidebar_off[1]
+    # draw upvote/downvote images
+    img.paste(upvote_img, (x, y), upvote_img)
+    img.paste(downvote_img, (x, y + 50), downvote_img)
+
+    # draw the indentation line
+    draw = ImageDraw.Draw(img)
+    line_color = (40, 40, 40, 1)
+    x_off = upvote_dim[0] / 2
+    line_start = (x + x_off, y + vote_img_pad)
+    line_end   = (x + x_off, y + vote_img_pad + line_height)
+    draw.line([line_start, line_end], fill=line_color, width=5)
+
+def draw_footer(img, pos):
+    x, y = pos
+    img.paste(footer_img, (x, y), footer_img)
+    return (x, y + footer_pad)
+
+
 
 def get_subimage_at_y(img, y, WIDTH, sub_height):
     image_np = np.array(image)
@@ -423,7 +496,7 @@ def write_sentence_to_image(text, img,
                             pos, width_box,
                             font, color):
     x, y = pos
-    draw_debug_line_y(img, y, (0, 255, 0, 1))
+    draw_debug_line_y(img, y, GREEN)
     start_x, end_x = width_box
 
     text_width, text_height, _ = get_text_size_freetype(text, font)
@@ -446,7 +519,7 @@ def write_sentence_to_image(text, img,
 
     # debug
     (x, y) = (x + sentence_end_pad, last_y)
-    draw_debug_line_y(img, y, (0, 255, 0, 1))
+    draw_debug_line_y(img, y, GREEN)
     return (x, y)
 
     #return (x + sentence_end_pad, last_y)
@@ -457,7 +530,7 @@ def write_paragraph_to_image(paragraph, img,
                              pos, width_box,
                              font, color):
     x, y  = pos
-    draw_debug_line_y(img, y, (255, 0, 0, 1))
+    draw_debug_line_y(img, y, RED)
     start_x, end_x = width_box
     frames = []
     sentences = get_sentences(paragraph)
@@ -469,7 +542,7 @@ def write_paragraph_to_image(paragraph, img,
         frames.append(np.array(img))
     LOG('END PARAGRAPH', '')
     (x, y) = start_x, y + paragraph_spacing
-    draw_debug_line_y(img, y, (255, 0, 0, 1))
+    draw_debug_line_y(img, y, RED)
     return frames, (x, y)
 
 
@@ -484,9 +557,9 @@ def write_comment_to_image(comment_body, img, pos):
     draw_debug_line_x(img, width_box[0], (0, 0, 255, 1))
     draw_debug_line_x(img, width_box[1], (0, 255, 255, 1))
 
-    #draw_debug_line_y(img, pos[1], (0, 255, 0, 1))
-    #body_height_dbg = compute_comment_body_height(comment_body, (text_start_x, text_width_cutoff))
-    #draw_debug_line_y(img, pos[1] + body_height_dbg, (255, 255, 0, 1))
+    draw_debug_line_y(img, y, YELLOW)
+    body_height_dbg = compute_comment_body_height(comment_body, (text_start_x, text_width_cutoff))
+    draw_debug_line_y(img, y + body_height_dbg, YELLOW)
 
     LOG('START WRITE COMMENT', comment_body)
     for paragraph in get_paragraphs(comment_body):
@@ -499,101 +572,17 @@ def write_comment_to_image(comment_body, img, pos):
     return frames, (x, y)
 
 
-def points_str(npoints):
-    multiplier = ''
-    if npoints >= 1000000:
-        npoints = npoints // 100000
-        multiplier = 'm'
-    elif npoints >= 1000:
-        npoints = npoints // 1000
-        multiplier = 'k'
-    return str(npoints)[:-1] + '.' + str(npoints)[-1] + multiplier + ' points'
-
-def time_ago_str(created_utc):
-    time_ago = int(time.time()) - int(created_utc)
-    if time_ago > 31536000:
-        n, s = time_ago // 31536000, 'year'
-    elif time_ago > 2678400:
-        n, s = time_ago // 2678400,  'month'
-    elif time_ago > 604800:
-        n, s = time_ago // 604800,   'week'
-    elif time_ago > 86400:
-        n, s = time_ago // 86400,    'day'
-    elif time_ago > 3600:
-        n, s = time_ago // 3600,     'hour'
-    elif time_ago > 60:
-        n, s = time_ago // 60,       'minute'
-    else:
-        n, s = time,                 'second'
-    if n > 1:
-        s += 's'
-    return str(n) + ' ' + s + ' ago'
-
-
-
-def draw_comment_header_to_image(img, pos, username, npoints, created_utc, medals):
-    draw  = ImageDraw.Draw(img)
-    text_color = (255, 255, 255, 1)
-    username_color = (22, 210, 252, 1)
-
-    #draw_debug_line_y(img, pos[1], (255, 0, 0, 1))
-
-    x_pad = 10
-    x, y = pos
-
-    # write the username above the image
-    (x, y) = draw_string_to_image('/u/' + username, img, (x, y), header_font, username_color)
-    x += x_pad
-
-    # write the points and time duration after the username 
-    string = ' • ' + points_str(npoints) + ' • ' + time_ago_str(created_utc)
-    (x, y) = draw_string_to_image(string, img, (x, y), header_font, text_color)
-
-
-
-def draw_comment_sidebar_to_image(img, pos, line_height):
-    (x, y) = pos[0] + sidebar_off[0], pos[1] + sidebar_off[1]
-
-    # draw upvote/downvote images
-    img.paste(upvote_img, (x, y), upvote_img)
-    img.paste(downvote_img, (x, y + 50), downvote_img)
-
-    # draw the indentation line
-    draw = ImageDraw.Draw(img)
-    line_color = (40, 40, 40, 1)
-    x_off = upvote_dim[0] / 2
-    line_start = (x + x_off, y + vote_img_pad)
-    line_end   = (x + x_off, y + vote_img_pad + line_height)
-    draw.line([line_start, line_end], fill=line_color, width=5)
-
-
-
-
-def draw_comment_footer_to_image(img, pos):
-
-    # debug
-    draw = ImageDraw.Draw(img)
-    #draw_debug_line_y(img, pos[1], (0, 255, 0, 1))
-    #draw_debug_line_y(img, pos[1] + footer_img.height, (0, 0, 255, 1))
-
-    x, y = pos
-    img.paste(footer_img, (x, y), footer_img)
-    return (x, y + footer_pad)
-
-
 
 
 def create_comment_frames(comment, img, start):
-
     x, y = start
 
     # draw sidebar
     line_height = compute_line_height(comment, (x, text_width_cutoff))
-    draw_comment_sidebar_to_image(img, (x, y), line_height)
+    draw_sidebar(img, (x, y), line_height)
 
     # draw header
-    header_pos = x, y + header_off
-    draw_comment_header_to_image(img, header_pos, comment['author'], comment['score'], 
+    draw_header(img, (x, y), comment['author'], comment['score'], 
                                  comment['created_utc'], '')
 
     # write comment and create new frame for each sentence
@@ -604,9 +593,15 @@ def create_comment_frames(comment, img, start):
 
     # draw comment footer to last frame
     footer_pos  = x, y + footer_off
-    (x, y) = draw_comment_footer_to_image(img, (x, y))
+    (x, y) = draw_footer(img, (x, y))
+    draw_debug_line_y(img, y, MAROON)
+    (x, y) = (x, y + comment_end_pad + footer_pad)
+    #(x, y) = (x, y + comment_end_pad)
+    #(x, y) = (x, y)
+    draw_debug_line_y(img, y, ORANGE)
+
     frames[-1] = np.array(img)
-    return frames, (x, y + comment_end_pad + footer_pad)
+    return frames, (x, y)
 
 
 # creates audio for each sentence of the comment body with gTTs and combines
