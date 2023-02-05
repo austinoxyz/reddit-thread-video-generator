@@ -63,7 +63,6 @@ text_start_y  = screen_height - text_height_cutoff
 
 magic_spacing_coefficient = 1.2
 line_spacing = int((comment_font.height >> 6) * magic_spacing_coefficient)
-paragraph_spacing = int(line_spacing * 1.2)
 
 comment_end_pad = 80
 sentence_end_pad = 25
@@ -134,20 +133,12 @@ def LOG(title, message, pos=''):
     print(' | \n', end='')
 
 
-def draw_debug_line_y(img, y, color):
+def draw_debug_line(img, y, color):
     if not debug:
         return
     draw = ImageDraw.Draw(img)
     dbg_ln_start, dbg_ln_end = (0, y), (screen_width, y)
     draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
-
-def draw_debug_line_x(img, x, color):
-    if not debug:
-        return
-    draw = ImageDraw.Draw(img)
-    dbg_ln_start, dbg_ln_end = (x, 0), (x, screen_height)
-    draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
-
 
 
 def load_top_posts_and_best_comments(subreddit_name):
@@ -272,10 +263,8 @@ def get_text_size_freetype(text, face):
 
 
 def compute_comment_body_height(comment_body, width_box):
-    print(f'{comment_body[:16]} {width_box}')
     start_x, end_x = width_box
     x, y = start_x, 0
-    last_y = y
     sentence_end_pad = 25
 
     for paragraph in get_paragraphs(comment_body):
@@ -291,16 +280,12 @@ def compute_comment_body_height(comment_body, width_box):
             if len(lines) == 1:
                 continue;
             y += line_spacing
-            for _ in range(len(lines[1:]) - 1):
-                y += line_spacing
-            x = start_x
 
-            #for line in lines[1:-1]:
-            #    y += line_spacing
-            #last_line_width = get_text_size_freetype(lines[-1], comment_font)[0]
-            #x = start_x + last_line_width + sentence_end_pad
-        #x, y = start_x, y + int(line_spacing * 0.2)
-        x, y = start_x, y + paragraph_spacing
+            for line in lines[1:-1]:
+                y += line_spacing
+            last_line_width = get_text_size_freetype(lines[-1], comment_font)[0]
+            x = start_x + last_line_width + sentence_end_pad
+        x, y = start_x, y + int(line_spacing * 1.2)
     return y
     #return y + line_spacing
 
@@ -422,20 +407,23 @@ def draw_string_to_image(string, img, pos, font, color):
 def write_sentence_to_image(text, img, 
                             pos, width_box,
                             font, color):
+    LOG('DRAW SENTENCE', text, pos)
+
     x, y = pos
-    draw_debug_line_y(img, y, (0, 255, 0, 1))
     start_x, end_x = width_box
 
     text_width, text_height, _ = get_text_size_freetype(text, font)
+
     if pos[0] + text_width > int(end_x * 0.9):
         lines = wrap_text(text, width_box, font, pos)
     else:
         lines = [text]
 
-    LOG('DRAWING SENTENCE', text, pos)
     (x, y) = draw_string_to_image(lines[0], img, (x, y), font, color)
+
     if len(lines) == 1:
         return (x + sentence_end_pad, y)
+
     y += line_spacing
 
     last_y = y
@@ -444,12 +432,7 @@ def write_sentence_to_image(text, img,
         last_y = y
         y += line_spacing
 
-    # debug
-    (x, y) = (x + sentence_end_pad, last_y)
-    draw_debug_line_y(img, y, (0, 255, 0, 1))
-    return (x, y)
-
-    #return (x + sentence_end_pad, last_y)
+    return (x + sentence_end_pad, last_y)
 
 
 
@@ -457,7 +440,6 @@ def write_paragraph_to_image(paragraph, img,
                              pos, width_box,
                              font, color):
     x, y  = pos
-    draw_debug_line_y(img, y, (255, 0, 0, 1))
     start_x, end_x = width_box
     frames = []
     sentences = get_sentences(paragraph)
@@ -468,33 +450,28 @@ def write_paragraph_to_image(paragraph, img,
                                               font, color)
         frames.append(np.array(img))
     LOG('END PARAGRAPH', '')
-    (x, y) = start_x, y + paragraph_spacing
-    draw_debug_line_y(img, y, (255, 0, 0, 1))
     return frames, (x, y)
 
 
 def write_comment_to_image(comment_body, img, pos):
+    LOG('START WRITE COMMENT', comment_body)
+
+    draw_debug_line(img, pos[1], (0, 255, 0, 1))
+    body_height_dbg = compute_comment_body_height(comment_body, (text_start_x, text_width_cutoff))
+    draw_debug_line(img, pos[1] + body_height_dbg, (255, 255, 0, 1))
+    #extra = body_height_dbg + 
 
     x, y = pos
-    draw_debug_line_y(img, y, (0, 0, 0, 1))
     width_box = (x, text_width_cutoff)
     color = (255, 255, 255, 1)
+    paragraphs = get_paragraphs(comment_body)
     frames = []
-
-    draw_debug_line_x(img, width_box[0], (0, 0, 255, 1))
-    draw_debug_line_x(img, width_box[1], (0, 255, 255, 1))
-
-    #draw_debug_line_y(img, pos[1], (0, 255, 0, 1))
-    #body_height_dbg = compute_comment_body_height(comment_body, (text_start_x, text_width_cutoff))
-    #draw_debug_line_y(img, pos[1] + body_height_dbg, (255, 255, 0, 1))
-
-    LOG('START WRITE COMMENT', comment_body)
-    for paragraph in get_paragraphs(comment_body):
-        paragraph_frames, (x, y) = write_paragraph_to_image(paragraph, img, 
+    for paragraph in paragraphs:
+        paragraph_frames, end = write_paragraph_to_image(paragraph, img, 
                                                              (x, y), width_box, 
                                                              comment_font, color)
         frames = frames + paragraph_frames
-        #x, y = pos[0], end[1] + paragraph_spacing
+        x, y = pos[0], end[1] + int(line_spacing * 1.2)
     LOG('END WRITE COMMENT', '', (x, y))
     return frames, (x, y)
 
@@ -536,7 +513,7 @@ def draw_comment_header_to_image(img, pos, username, npoints, created_utc, medal
     text_color = (255, 255, 255, 1)
     username_color = (22, 210, 252, 1)
 
-    #draw_debug_line_y(img, pos[1], (255, 0, 0, 1))
+    #draw_debug_line(img, pos[1], (255, 0, 0, 1))
 
     x_pad = 10
     x, y = pos
@@ -573,8 +550,8 @@ def draw_comment_footer_to_image(img, pos):
 
     # debug
     draw = ImageDraw.Draw(img)
-    #draw_debug_line_y(img, pos[1], (0, 255, 0, 1))
-    #draw_debug_line_y(img, pos[1] + footer_img.height, (0, 0, 255, 1))
+    #draw_debug_line(img, pos[1], (0, 255, 0, 1))
+    #draw_debug_line(img, pos[1] + footer_img.height, (0, 0, 255, 1))
 
     x, y = pos
     img.paste(footer_img, (x, y), footer_img)
