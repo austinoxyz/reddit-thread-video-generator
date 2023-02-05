@@ -21,21 +21,8 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import subprocess
 
-debug = True
 
-screen_height, screen_width = 1080, 1920 
-
-aspect = float(screen_width / screen_height)
-fps = 30
-background_color = (26, 26, 27, 0)
-
-
-text_width_cutoff = int(screen_width * 0.96)
-text_start_x  = screen_width - text_width_cutoff
-
-text_height_cutoff = int(screen_height * 0.90)
-text_start_y  = screen_height - text_height_cutoff
-
+# Fonts 
 comment_font = freetype.Face('./Roboto-Regular.ttf')
 comment_font_sz = 32
 comment_font.set_char_size(comment_font_sz * 64)
@@ -47,6 +34,32 @@ header_font_sz = 24
 header_font.set_char_size(header_font_sz * 64)
 header_font.load_char('A')
 header_font_height = header_font.height >> 6
+
+
+# Images
+upvote_img = Image.open('./res/upvote.png').convert("RGBA")
+upvote_dim = (int(upvote_img.width / 5), int(upvote_img.height / 5))
+upvote_img = upvote_img.resize(upvote_dim)
+
+downvote_img  = Image.open('./res/downvote.png').convert("RGBA")
+downvote_dim = (int(downvote_img.width / 5), int(downvote_img.height / 5))
+downvote_img  = downvote_img.resize(downvote_dim)
+
+footer_img  = Image.open('./res/comment_footer.png').convert("RGBA")
+footer_img_dim = (int(footer_img.width / 2), int(footer_img.height / 2))
+footer_img = footer_img.resize(footer_img_dim)
+
+
+# Video dimensions and measurements
+screen_height, screen_width = 1080, 1920 
+aspect = float(screen_width / screen_height)
+fps = 30
+background_color = (26, 26, 27, 0)
+
+text_width_cutoff  = int(screen_width * 0.96)
+text_start_x  = screen_width - text_width_cutoff
+text_height_cutoff = int(screen_height * 0.90)
+text_start_y  = screen_height - text_height_cutoff
 
 magic_spacing_coefficient = 1.2
 line_spacing = int((comment_font.height >> 6) * magic_spacing_coefficient)
@@ -60,27 +73,12 @@ footer_off  = -10
 sidebar_off = -50, -50
 
 vote_img_pad = 100
-
-
-upvote_img = Image.open('./res/upvote.png').convert("RGBA")
-upvote_dim = (int(upvote_img.width / 5), int(upvote_img.height / 5))
-upvote_img = upvote_img.resize(upvote_dim)
-
-downvote_img  = Image.open('./res/downvote.png').convert("RGBA")
-downvote_size = (int(downvote_img.width / 5), int(downvote_img.height / 5))
-downvote_img  = downvote_img.resize(downvote_size)
-
-footer_img  = Image.open('./res/comment_footer.png').convert("RGBA")
-size = (int(footer_img.width / 2), int(footer_img.height / 2))
-
-footer_img = footer_img.resize(size)
 footer_pad = footer_img.height + 10
 
+
+# Project Structure
 working_dir = 'build-vid/'
 temp_dir    = working_dir + 'tmp/'
-
-comment_video_name_base = 'comment'
-chain_video_name_base   = 'chain'
 
 file_names_txt_file = working_dir + 'comment_videos.txt'
 
@@ -88,6 +86,8 @@ na_video_name  = 'audioless_video.mp4'
 audio_name  = 'audio.mp3'
 static_video_name = 'static.mp4'
 final_video_name = 'final.mp4'
+comment_video_name_base = 'comment'
+chain_video_name_base   = 'chain'
 
 comment_n = 0
 
@@ -116,6 +116,9 @@ def replace_acronyms(text):
     return re.sub(pattern, lambda x: acronym_map[x.group()], text)
 
 
+
+debug = True
+
 def LOG(title, message, pos=''):
     if len(title) > 32:
         title = title[:32]
@@ -128,6 +131,15 @@ def LOG(title, message, pos=''):
         print(f' | {message}')
         return
     print(' | \n', end='')
+
+
+def draw_debug_line(img, y, color):
+    if not debug:
+        return
+    draw = ImageDraw.Draw(img)
+    dbg_ln_start, dbg_ln_end = (0, y), (screen_width, y)
+    draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
+
 
 
 def load_top_posts_and_best_comments(subreddit_name):
@@ -363,13 +375,6 @@ def write_sentence_to_image(text, img,
 
     return (x + sentence_end_pad, last_y)
 
-
-def draw_debug_line(img, y, color):
-    if not debug:
-        return
-    draw = ImageDraw.Draw(img)
-    dbg_ln_start, dbg_ln_end = (0, y), (screen_width, y)
-    draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
 
 
 def write_paragraph_to_image(paragraph, img, 
