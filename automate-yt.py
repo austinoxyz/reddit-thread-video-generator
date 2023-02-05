@@ -21,6 +21,8 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import subprocess
 
+debug = True
+
 screen_height, screen_width = 1080, 1920 
 
 aspect = float(screen_width / screen_height)
@@ -72,8 +74,8 @@ footer_img  = footer_img.resize(size)
 
 footer_padding = footer_img.height + 10
 
-temp_dir    = 'tmp/'
 working_dir = 'build-vid/'
+temp_dir    = working_dir + 'tmp/'
 
 comment_video_name_base = 'comment'
 chain_video_name_base = 'chain'
@@ -87,10 +89,6 @@ final_video_name = 'final.mp4'
 
 comment_n = 0
 
-#  DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG DEBUG
-start_comment_color = (0, 255, 0, 1)
-header_offset_color = (255, 0, 0, 1)
-commend_end_color   = (0, 0, 255, 1)
 
 
 acronym_map = {
@@ -127,7 +125,8 @@ def LOG(title, message, pos=''):
     if message:
         print(f' | {message}')
         return
-    print('\n', end='')
+    print(' | \n', end='')
+
 
 def load_top_posts_and_best_comments(subreddit_name):
     reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
@@ -365,6 +364,8 @@ def write_sentence_to_image(text, img,
 
 
 def draw_debug_line(img, y, color):
+    if not debug:
+        return
     draw = ImageDraw.Draw(img)
     dbg_ln_start, dbg_ln_end = (0, y), (screen_width, y)
     draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
@@ -377,16 +378,19 @@ def write_paragraph_to_image(paragraph, img,
     start_x, end_x = width_box
     frames = []
     sentences = get_sentences(paragraph)
+    LOG('START PARAGRAPH', '', (x, y))
     for sentence in sentences:
         img, (x, y) = write_sentence_to_image(sentence, img, 
                                               (x, y), (start_x, end_x),
                                               font, color)
         frames.append(np.array(img))
+    LOG('END PARAGRAPH', '')
     return frames, (x, y)
 
 
 def write_comment_to_image(comment_body, img, pos):
-    # debug 
+    LOG('START WRITE COMMENT', comment_body)
+
     draw_debug_line(img, pos[1], (0, 255, 0, 1))
     body_height_dbg = compute_comment_body_height(comment_body, (text_start_x, text_width_cutoff))
     draw_debug_line(img, pos[1] + body_height_dbg, (255, 255, 0, 1))
@@ -394,17 +398,12 @@ def write_comment_to_image(comment_body, img, pos):
     x, y = pos
     width_box = (x, text_width_cutoff)
     color = (255, 255, 255, 1)
-    LOG('START WRITE COMMENT', '')
-    LOG(f'BODY', comment_body)
     paragraphs = get_paragraphs(comment_body)
     frames = []
     for paragraph in paragraphs:
-        LOG('START PARAGRAPH', '', (x, y))
-        LOG('BODY', paragraph)
         paragraph_frames, end = write_paragraph_to_image(paragraph, img, 
                                                              (x, y), width_box, 
                                                              comment_font, color)
-        LOG('END PARAGRAPH', '')
         frames = frames + paragraph_frames
         x, y = pos[0], end[1] + int(line_spacing * 1.2)
     LOG('END WRITE COMMENT', '', (x, y))
