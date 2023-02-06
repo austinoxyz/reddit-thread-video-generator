@@ -75,7 +75,6 @@ magic_spacing_coefficient = 1.2
 line_spacing = int((comment_font.height >> 6) * magic_spacing_coefficient)
 paragraph_spacing = int(line_spacing * 1.2)
 
-comment_end_pad = 80
 sentence_end_pad = 25
 
 indent_off  = 50
@@ -84,7 +83,8 @@ footer_off  = 0
 sidebar_off = -50, -50
 
 vote_img_pad = 100
-footer_pad = footer_img.height + 20
+comment_end_pad = footer_img.height + 100
+#footer_pad = footer_img.height + 20
 
 
 # Project Structure
@@ -324,7 +324,6 @@ def comment_body_height(comment_body, width_box):
                 lines = wrap_text(sentence, width_box, comment_font, (x, y))
             else:
                 lines = [sentence]
-
             first_line_width = get_text_size_freetype(lines[0], comment_font)[0]
             x += first_line_width + sentence_end_pad
             if len(lines) == 1:
@@ -333,17 +332,9 @@ def comment_body_height(comment_body, width_box):
             y += line_spacing
             for _ in range(len(lines[1:]) - 1):
                 y += line_spacing
-            # width of last line
             x += get_text_size_freetype(lines[-1], comment_font)[0] 
- 
-            #for line in lines[1:-1]:
-            #    y += line_spacing
-            #last_line_width = get_text_size_freetype(lines[-1], comment_font)[0]
-            #x = start_x + last_line_width + sentence_end_pad
-        #x, y = start_x, y + int(line_spacing * 0.2)
         x, y = start_x, y + paragraph_spacing
     return y
-    #return y + line_spacing
 
 
 
@@ -369,7 +360,7 @@ def compute_start_y(comment):
 def total_comment_height(comment, width_box):
     start_x, end_x = width_box
     body_h = comment_body_height(comment['body'], width_box)
-    h = -header_off+ body_h + footer_pad + comment_end_pad + header_off
+    h = -header_off+ body_h + comment_end_pad + header_off
     if comment.get('replies') is None:
         return h
     for reply in comment['replies']:
@@ -431,7 +422,7 @@ def draw_sidebar(img, pos, line_height):
 def draw_footer(img, pos):
     x, y = pos
     img.paste(footer_img, (x, y), footer_img)
-    return (x, y + footer_pad)
+    return (x, y)
 
 
 
@@ -583,16 +574,14 @@ def create_comment_frames(comment, img, start):
     # write comment and create new frame for each sentence
     frames, (x, y) = write_comment(comment['body'], img, (x, y))
 
-    comment_end_pad = 0
-    y += comment_end_pad
-
     # draw comment footer to last frame
     footer_pos  = x, y + footer_off
     (x, y) = draw_footer(img, (x, y))
     draw_debug_line_y(img, y, MAROON)
-    (x, y) = (x, y + comment_end_pad + footer_pad)
+    (x, y) = (x, y + comment_end_pad)
     #(x, y) = (x, y + comment_end_pad)
     #(x, y) = (x, y)
+    draw_debug_line_y(img, y, MAROON)
     draw_debug_line_y(img, y, ORANGE)
 
     frames[-1] = np.array(img)
