@@ -84,6 +84,10 @@ sidebar_off = -50, -50
 vote_img_pad = 100
 comment_end_pad = footer_img.height + 100
 
+pane_y = 0
+total_chain_height = 0
+img_height = 0
+
 
 # Project Structure
 working_dir = 'build-vid/'
@@ -330,6 +334,19 @@ def comment_body_height(comment_body, width_box):
         x, y = start_x, y + paragraph_spacing
     return y
 
+def compute_comment_height(comment, width_box):
+    body_h = comment_body_height(comment['body'], width_box)
+    return -header_off+ body_h + comment_end_pad + header_off
+
+
+def total_comment_height(comment, width_box):
+    start_x, end_x = width_box
+    h = compute_comment_height(comment, width_box)
+    if comment.get('replies') is None:
+        return h
+    for reply in comment['replies']:
+        h += total_comment_height(reply, (start_x + indent_off, end_x))
+    return h
 
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
@@ -348,15 +365,6 @@ def compute_start_y(comment):
     else:
         return int((screen_height / 2)  - (height / 2))
 
-def total_comment_height(comment, width_box):
-    start_x, end_x = width_box
-    body_h = comment_body_height(comment['body'], width_box)
-    h = -header_off+ body_h + comment_end_pad + header_off
-    if comment.get('replies') is None:
-        return h
-    for reply in comment['replies']:
-        h += total_comment_height(reply, (start_x + indent_off, end_x))
-    return h
 
 
 def wrap_text(text, width_box, font, pos):
@@ -419,6 +427,7 @@ def draw_footer(img, pos):
 
 def get_subimage_at_y(img, y, WIDTH, sub_height):
     image_np = np.array(image)
+    np.array(image)[pane_y:pane_y + screen_height, 0:screen_width, :]
     sub_image = image_np[y:y + sub_height, 0:WIDTH, :]
     return sub_image
 
@@ -514,7 +523,8 @@ def write_paragraph(paragraph, img, pos, width_box, font, color):
     LOG('START PARAGRAPH', '', (x, y))
     for sentence in sentences:
         (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, color)
-        frames.append(np.array(img))
+        #frames.append(np.array(img))
+        frames.append(np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :])
     LOG('END PARAGRAPH', '')
     (x, y) = start_x, y + paragraph_spacing
     draw_debug_line_y(img, y, RED)
@@ -571,7 +581,8 @@ def create_comment_frames(comment, img, start):
     draw_debug_line_y(img, y, MAROON)
     draw_debug_line_y(img, y, ORANGE)
 
-    frames[-1] = np.array(img)
+    #frames[-1] = np.array(img)
+    frames[-1] = np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :]
     return frames, (x, y)
 
 
@@ -586,12 +597,25 @@ def create_comment_frames(comment, img, start):
 # returns the img given, in case this comment is part of a tree
 def create_comment_video(comment, img, start):
     x, y = start
+
+    # scroll pane
+    global pane_y
+    comment_height = compute_comment_height(comment, (x, text_width_cutoff))
+    if y + comment_height > pane_y + screen_height:
+        old_pane_y = pane_y
+        if img_height - y < screen_height:
+            pane_y = img_height - screen_height
+        else:
+            pane_y = y - text_start_y
+        LOG('PANE SHIFT', '', (old_pane_y, pane_y))
+
     durations      = create_comment_audio(comment['body'])
     frames, (x, y) = create_comment_frames(comment, img, (x, y))
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
     for frame, duration in list(zip(frames, durations)):
+        print(type(frame))
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
         for _ in range(int(fps * duration)):
             out.write(cv2_frame)
@@ -600,7 +624,8 @@ def create_comment_video(comment, img, start):
 
     global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name}", shell=True, timeout=120)
+#    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
     comment_n += 1
 
@@ -639,11 +664,24 @@ def create_comment_chain_video(comment, chain_n):
     if (more_replies_than_desired(comment)):
         raise MoreRepliesThanDesiredError("too many replies doofus.")
 
+    # scroll pane
+    global pane_y, total_chain_height, img_height
+    start_y = int((screen_height / 2) - (total_chain_height / 2))
+    img_height = screen_height
+    total_chain_height = total_comment_height(comment, (text_start_x, text_width_cutoff))
+    if total_chain_height > text_height_cutoff:
+        start_y = text_start_y
+        img_height = total_chain_height + (2 * text_start_y)
+
+
     global comment_n
     comment_n = 0
+    (x, y) = (text_start_x, start_y)
+    print(img_height)
+    img = Image.new("RGBA", (screen_width, img_height), background_color)
+    print(img.height)
+    #img = Image.new("RGBA", (screen_width, img_height), background_color)
 
-    (x, y) = (text_start_x, compute_start_y(comment))
-    img = Image.new("RGBA", (screen_width, screen_height), background_color)
     end, file_names = create_comment_video(comment, img, (x, y))
 
     with open(file_names_txt_file, 'w') as f:
@@ -651,7 +689,8 @@ def create_comment_chain_video(comment, chain_n):
             f.write('file \'' + file_name + '\'\n')
 
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
+    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
 
     return out_file_name
@@ -698,6 +737,5 @@ if __name__ == '__main__':
 
     create_comment_chain_video(comment, 1)
     #create_final_video(posts[0]["comments"][:2])
-
 
 
