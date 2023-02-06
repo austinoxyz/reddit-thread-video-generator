@@ -606,6 +606,7 @@ def create_comment_video(comment, img, start):
         if img_height - y < screen_height:
             pane_y = img_height - screen_height
         else:
+            pane_y += (y + comment_height) - (pane_y + screen_height)
             pane_y = y - text_start_y
         LOG('PANE SHIFT', '', (old_pane_y, pane_y))
 
@@ -624,8 +625,8 @@ def create_comment_video(comment, img, start):
 
     global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name}", shell=True, timeout=120)
-#    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    #subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name}", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
     comment_n += 1
 
@@ -672,7 +673,9 @@ def create_comment_chain_video(comment, chain_n):
     if total_chain_height > text_height_cutoff:
         start_y = text_start_y
         img_height = total_chain_height + (2 * text_start_y)
-
+    LOG('TEXT START Y', str(text_start_y))
+    LOG('TOTAL CHAIN HEIGHT', str(total_chain_height))
+    LOG('IMAGE HEIGHT', str(img_height))
 
     global comment_n
     comment_n = 0
@@ -689,8 +692,8 @@ def create_comment_chain_video(comment, chain_n):
             f.write('file \'' + file_name + '\'\n')
 
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
-    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
 
     return out_file_name
