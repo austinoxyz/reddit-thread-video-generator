@@ -22,13 +22,15 @@ import cv2
 import subprocess
 
 # Colors
-RED    = (255, 0, 0, 1)
-GREEN  = (0, 255, 0, 1)
-BLUE   = (0, 0, 255, 1)
-PINK   = (252, 17, 154, 1)
-YELLOW = (252, 248, 22, 1)
-ORANGE = (252, 127, 17, 1)
-MAROON = (68, 2, 2, 1)
+RED    = (255,   0,   0, 1)
+GREEN  = (  0, 255,   0, 1)
+BLUE   = (  0,   0, 255, 1)
+CYAN   = (  0, 255, 255, 1)
+PINK   = (252,  17, 154, 1)
+YELLOW = (252, 248,  22, 1)
+ORANGE = (252, 127,  17, 1)
+MAROON = ( 68,   2,   2, 1)
+
 
 # Fonts 
 comment_font = freetype.Face('./Roboto-Regular.ttf')
@@ -82,7 +84,7 @@ footer_off  = 0
 sidebar_off = -50, -50
 
 vote_img_pad = 100
-footer_pad = footer_img.height + 10
+footer_pad = footer_img.height + 20
 
 
 # Project Structure
@@ -309,8 +311,7 @@ def get_text_size_freetype(text, face):
 
 
 
-def compute_comment_body_height(comment_body, width_box):
-    print(f'{comment_body[:16]} {width_box}')
+def comment_body_height(comment_body, width_box):
     start_x, end_x = width_box
     x, y = start_x, 0
     last_y = y
@@ -328,11 +329,13 @@ def compute_comment_body_height(comment_body, width_box):
             x += first_line_width + sentence_end_pad
             if len(lines) == 1:
                 continue;
+            x = start_x
             y += line_spacing
             for _ in range(len(lines[1:]) - 1):
                 y += line_spacing
-            x = start_x
-
+            # width of last line
+            x += get_text_size_freetype(lines[-1], comment_font)[0] 
+ 
             #for line in lines[1:-1]:
             #    y += line_spacing
             #last_line_width = get_text_size_freetype(lines[-1], comment_font)[0]
@@ -346,32 +349,32 @@ def compute_comment_body_height(comment_body, width_box):
 
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
-    body_height = compute_comment_body_height(comment['body'], width_box)
-    height = body_height - downvote_img.height + footer_off + footer_img.height - 15
+    body_height = comment_body_height(comment['body'], width_box)
+    height = body_height - downvote_img.height + footer_off + comment_end_pad
     if comment.get('replies') is None:
         return height
     for reply in comment['replies']:
-        height += compute_total_comment_height(reply, (start_x + indent_off, end_x))
+        height += total_comment_height(reply, (start_x + indent_off, end_x))
     #return height - 45
-    return height - 45
-    #return header_off + compute_total_comment_height(comment, width_box)
+    return height
+    #return header_off + total_comment_height(comment, width_box)
 
 def compute_start_y(comment):
-    height = compute_total_comment_height(comment, (text_start_x, text_width_cutoff))
+    height = total_comment_height(comment, (text_start_x, text_width_cutoff))
     if height > text_height_cutoff:
         return text_start_y
     else:
         return int((screen_height / 2)  - (height / 2))
 
-def compute_total_comment_height(comment, width_box):
+def total_comment_height(comment, width_box):
     start_x, end_x = width_box
-    body_height = compute_comment_body_height(comment['body'], width_box)
-    height =  -header_off + body_height + footer_off + footer_img.height
+    body_h = comment_body_height(comment['body'], width_box)
+    h = -header_off+ body_h + footer_pad + comment_end_pad + header_off
     if comment.get('replies') is None:
-        return height
+        return h
     for reply in comment['replies']:
-        height += compute_total_comment_height(reply, (start_x + indent_off, end_x))
-    return height
+        h += total_comment_height(reply, (start_x + indent_off, end_x))
+    return h
 
 
 def wrap_text(text, width_box, font, pos):
@@ -489,12 +492,10 @@ def draw_string_to_image(string, img, pos, font, color):
 
     
 
-# only contains the text within a specified width - 
-# text will continue to grow downward in write_paragraph_to_image()
+# only contains the text within a specified width -
+# text will continue to grow downward
 # so long as there are still sentences to write in the paragraph
-def write_sentence_to_image(text, img, 
-                            pos, width_box,
-                            font, color):
+def write_sentence(text, img, pos, width_box, font, color):
     x, y = pos
     draw_debug_line_y(img, y, GREEN)
     start_x, end_x = width_box
@@ -526,9 +527,7 @@ def write_sentence_to_image(text, img,
 
 
 
-def write_paragraph_to_image(paragraph, img, 
-                             pos, width_box,
-                             font, color):
+def write_paragraph(paragraph, img, pos, width_box, font, color):
     x, y  = pos
     draw_debug_line_y(img, y, RED)
     start_x, end_x = width_box
@@ -536,9 +535,7 @@ def write_paragraph_to_image(paragraph, img,
     sentences = get_sentences(paragraph)
     LOG('START PARAGRAPH', '', (x, y))
     for sentence in sentences:
-        (x, y) = write_sentence_to_image(sentence, img, 
-                                              (x, y), (start_x, end_x),
-                                              font, color)
+        (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, color)
         frames.append(np.array(img))
     LOG('END PARAGRAPH', '')
     (x, y) = start_x, y + paragraph_spacing
@@ -546,26 +543,25 @@ def write_paragraph_to_image(paragraph, img,
     return frames, (x, y)
 
 
-def write_comment_to_image(comment_body, img, pos):
-
+def write_comment(comment_body, img, pos):
     x, y = pos
-    draw_debug_line_y(img, y, (0, 0, 0, 1))
     width_box = (x, text_width_cutoff)
     color = (255, 255, 255, 1)
     frames = []
 
-    draw_debug_line_x(img, width_box[0], (0, 0, 255, 1))
-    draw_debug_line_x(img, width_box[1], (0, 255, 255, 1))
+    draw_debug_line_x(img, width_box[0], BLUE)
+    draw_debug_line_x(img, width_box[1], BLUE)
 
     draw_debug_line_y(img, y, YELLOW)
-    body_height_dbg = compute_comment_body_height(comment_body, (text_start_x, text_width_cutoff))
+    body_height_dbg = comment_body_height(comment_body, width_box)
     draw_debug_line_y(img, y + body_height_dbg, YELLOW)
+    total_height_dbg = total_comment_height(comment, width_box)
+    print(total_height_dbg)
+    draw_debug_line_y(img, y + total_height_dbg, CYAN)
 
     LOG('START WRITE COMMENT', comment_body)
     for paragraph in get_paragraphs(comment_body):
-        paragraph_frames, (x, y) = write_paragraph_to_image(paragraph, img, 
-                                                             (x, y), width_box, 
-                                                             comment_font, color)
+        paragraph_frames, (x, y) = write_paragraph(paragraph, img, (x, y), width_box, comment_font, color)
         frames = frames + paragraph_frames
         #x, y = pos[0], end[1] + paragraph_spacing
     LOG('END WRITE COMMENT', '', (x, y))
@@ -582,11 +578,10 @@ def create_comment_frames(comment, img, start):
     draw_sidebar(img, (x, y), line_height)
 
     # draw header
-    draw_header(img, (x, y), comment['author'], comment['score'], 
-                                 comment['created_utc'], '')
+    draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], '')
 
     # write comment and create new frame for each sentence
-    frames, (x, y) = write_comment_to_image(comment['body'], img, (x, y))
+    frames, (x, y) = write_comment(comment['body'], img, (x, y))
 
     comment_end_pad = 0
     y += comment_end_pad
@@ -614,38 +609,31 @@ def create_comment_frames(comment, img, start):
 # 
 # returns the img given, in case this comment is part of a tree
 def create_comment_video(comment, img, start):
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
     x, y = start
-
     durations      = create_comment_audio(comment['body'])
     frames, (x, y) = create_comment_frames(comment, img, (x, y))
 
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
     for frame, duration in list(zip(frames, durations)):
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
         for _ in range(int(fps * duration)):
             out.write(cv2_frame)
-
     out.release()
     cv2.destroyAllWindows()
 
     global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
     subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
-#    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name}", shell=True, timeout=120)
-
     LOG('VIDEO CREATED', out_file_name)
     comment_n += 1
 
     out_file_names = [out_file_name]
-
     if 'replies' in comment:
         for reply in comment['replies']:
             (_, y), reply_out_file_names = create_comment_video(reply, img, (x + indent_off, y))
             out_file_names.append(flatten(reply_out_file_names))
-
     return (x, y), flatten(out_file_names)
-
 
 
 class MoreRepliesThanDesiredError(Exception):
@@ -675,13 +663,11 @@ def create_comment_chain_video(comment, chain_n):
     if (more_replies_than_desired(comment)):
         raise MoreRepliesThanDesiredError("too many replies doofus.")
 
-    img = Image.new("RGBA", (screen_width, screen_height), background_color)
-
     global comment_n
     comment_n = 0
 
     (x, y) = (text_start_x, compute_start_y(comment))
-    #(x, y) = (text_start_x, text_start_y)
+    img = Image.new("RGBA", (screen_width, screen_height), background_color)
     end, file_names = create_comment_video(comment, img, (x, y))
 
     with open(file_names_txt_file, 'w') as f:
@@ -725,14 +711,14 @@ if __name__ == '__main__':
 
     #width_box = (text_start_x, text_width_cutoff)
     #comment_body = comment['body']
-    #body_height  = compute_comment_body_height(comment_body, width_box)
-    #total_height = compute_total_comment_height(comment, width_box)
+    #body_height  = comment_body_height(comment_body, width_box)
+    #total_height = total_comment_height(comment, width_box)
     #line_height  = compute_line_height(comment, width_box)
     #print(body_height)
     #print(total_height)
     #print(line_height)
 
-    #print(compute_comment_body_height(comment['replies'][0]['body'], width_box))
+    #print(comment_body_height(comment['replies'][0]['body'], width_box))
 
     create_comment_chain_video(comment, 1)
     #create_final_video(posts[0]["comments"][:2])
