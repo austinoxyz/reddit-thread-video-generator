@@ -79,12 +79,10 @@ sentence_end_pad = 25
 
 indent_off  = 50
 header_off  = -50
-footer_off  = 0
 sidebar_off = -50, -50
 
 vote_img_pad = 100
 comment_end_pad = footer_img.height + 100
-#footer_pad = footer_img.height + 20
 
 
 # Project Structure
@@ -136,7 +134,7 @@ def flatten(lst):
     return flattened_list
 
 
-debug = True
+debug = False
 
 def LOG(title, message, pos=''):
     if len(title) > 32:
@@ -293,7 +291,6 @@ def get_sentences(content):
     return [s.strip() + (content[content.find(s)+len(s)]) 
             for s in re.split("[!?.]", content) if s]
 
-
 def get_text_size_freetype(text, face):
     slot = face.glyph
     width, height, baseline = 0, 0, 0
@@ -309,14 +306,11 @@ def get_text_size_freetype(text, face):
         previous = c
     return width, height, baseline
 
-
-
 def comment_body_height(comment_body, width_box):
     start_x, end_x = width_box
     x, y = start_x, 0
-    last_y = y
-    sentence_end_pad = 25
 
+    last_y = y
     for paragraph in get_paragraphs(comment_body):
         for sentence in get_sentences(paragraph):
             sent_width, sent_height, _ = get_text_size_freetype(sentence, comment_font)
@@ -337,18 +331,15 @@ def comment_body_height(comment_body, width_box):
     return y
 
 
-
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
     body_height = comment_body_height(comment['body'], width_box)
-    height = body_height - downvote_img.height + footer_off + comment_end_pad
+    height = body_height - downvote_img.height + comment_end_pad + header_off - 25
     if comment.get('replies') is None:
         return height
     for reply in comment['replies']:
         height += total_comment_height(reply, (start_x + indent_off, end_x))
-    #return height - 45
     return height
-    #return header_off + total_comment_height(comment, width_box)
 
 def compute_start_y(comment):
     height = total_comment_height(comment, (text_start_x, text_width_cutoff))
@@ -457,12 +448,11 @@ def draw_bitmap_to_image(bitmap, img, pos, color):
 
 # draws endlessly to the right with no logic otherwise
 def draw_string_to_image(string, img, pos, font, color):
-
     x, y = pos
-    slot = font.glyph
-    previous = 0
     width, height, baseline = get_text_size_freetype(string, font)
 
+    slot = font.glyph
+    previous = 0
     for c in string:
         font.load_char(c)
         bitmap = font.glyph.bitmap
@@ -478,7 +468,6 @@ def draw_string_to_image(string, img, pos, font, color):
         kerning = font.get_kerning(previous, c).x >> 6
         x += advance + kerning
         previous = c
-
     return (x, y)
 
     
@@ -514,8 +503,6 @@ def write_sentence(text, img, pos, width_box, font, color):
     draw_debug_line_y(img, y, GREEN)
     return (x, y)
 
-    #return (x + sentence_end_pad, last_y)
-
 
 
 def write_paragraph(paragraph, img, pos, width_box, font, color):
@@ -534,7 +521,7 @@ def write_paragraph(paragraph, img, pos, width_box, font, color):
     return frames, (x, y)
 
 
-def write_comment(comment_body, img, pos):
+def write_comment(comment, img, pos):
     x, y = pos
     width_box = (x, text_width_cutoff)
     color = (255, 255, 255, 1)
@@ -544,17 +531,20 @@ def write_comment(comment_body, img, pos):
     draw_debug_line_x(img, width_box[1], BLUE)
 
     draw_debug_line_y(img, y, YELLOW)
-    body_height_dbg = comment_body_height(comment_body, width_box)
+    body_height_dbg = comment_body_height(comment['body'], width_box)
     draw_debug_line_y(img, y + body_height_dbg, YELLOW)
     total_height_dbg = total_comment_height(comment, width_box)
     print(total_height_dbg)
-    draw_debug_line_y(img, y + total_height_dbg, CYAN)
+    if comment_n == 0:
+        draw_debug_line_y(img, y + total_height_dbg, CYAN)
+    else:
+        draw_debug_line_y(img, y + total_height_dbg, RED)
 
-    LOG('START WRITE COMMENT', comment_body)
-    for paragraph in get_paragraphs(comment_body):
+
+    LOG('START WRITE COMMENT', comment['body'])
+    for paragraph in get_paragraphs(comment['body']):
         paragraph_frames, (x, y) = write_paragraph(paragraph, img, (x, y), width_box, comment_font, color)
         frames = frames + paragraph_frames
-        #x, y = pos[0], end[1] + paragraph_spacing
     LOG('END WRITE COMMENT', '', (x, y))
     return frames, (x, y)
 
@@ -572,15 +562,12 @@ def create_comment_frames(comment, img, start):
     draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], '')
 
     # write comment and create new frame for each sentence
-    frames, (x, y) = write_comment(comment['body'], img, (x, y))
+    frames, (x, y) = write_comment(comment, img, (x, y))
 
     # draw comment footer to last frame
-    footer_pos  = x, y + footer_off
     (x, y) = draw_footer(img, (x, y))
     draw_debug_line_y(img, y, MAROON)
     (x, y) = (x, y + comment_end_pad)
-    #(x, y) = (x, y + comment_end_pad)
-    #(x, y) = (x, y)
     draw_debug_line_y(img, y, MAROON)
     draw_debug_line_y(img, y, ORANGE)
 
@@ -694,8 +681,8 @@ if __name__ == '__main__':
         posts = json.load(posts_file)
 
     comment = posts[0]["comments"][0]
-    comment['replies'] = [comment['replies'][0]]
-    #comment['replies'] = comment['replies'][:3]
+    #comment['replies'] = [comment['replies'][0]]
+    comment['replies'] = comment['replies'][:3]
     #comment['replies'][0]['replies'] = []
 
     #width_box = (text_start_x, text_width_cutoff)
