@@ -538,7 +538,7 @@ def write_paragraph(paragraph, img, pos, width_box, font, color):
         (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, color)
         frames.append(np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :])
         # scroll pane
-        if y - pane_y > text_height_cutoff:
+        if y - pane_y > screen_height:
             if img_height - y < screen_height:
                 pane_y = img_height - screen_height
             else:
@@ -743,6 +743,12 @@ if __name__ == '__main__':
     #comment['body'] = cleanup_text(comment['body'])
     #for reply in comment['replies']:
     #    reply['body'] = cleanup_text(reply['body'])
+
+    for i in range(1, 2):
+        for reply in posts[i]['comments'][0]['replies']:
+            comment['body'] += cleanup_text(reply['body']) + '\n'
+    comment['body'] = cleanup_text(comment['body'])
+    print(comment['body'])
 
 
     create_comment_chain_video(comment, 1)
