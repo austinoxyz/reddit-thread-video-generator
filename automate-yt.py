@@ -175,10 +175,11 @@ def draw_debug_line_x(img, x, color):
 
 
 def get_paragraphs(content):
-    return [s for s in content.split("\n") if s]
+    return [cleanup_text(s) for s in content.split("\n") if s]
 
 # TODO split on "..." as well
 def get_sentences(content):
+    print(content)
     return [s.strip() + (content[content.find(s)+len(s)]) 
             for s in re.split("[!?.]", content) if s]
     #sents = [s for s in re.split("[!?.]", content) if s]
@@ -553,7 +554,6 @@ def create_comment_frames(comment, img, start):
 # returns the img given, in case this comment is part of a tree
 def create_comment_video(comment, img, start):
     x, y = start
-
     # scroll pane
     global pane_y
     comment_height = compute_comment_height(comment, (x, text_width_cutoff))
@@ -612,7 +612,7 @@ def more_replies_than_desired(comment):
     return False
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
-def create_comment_chain_video(comment, chain_n):
+def create_comment_chain_video(comment):
     #if (more_replies_than_desired(comment)):
     #    raise MoreRepliesThanDesiredError("too many replies doofus.")
 
@@ -641,10 +641,12 @@ def create_comment_chain_video(comment, chain_n):
         for file_name in file_names:
             f.write('file \'' + file_name + '\'\n')
 
+    global chain_n
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
     #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
+    chain_n += 1
 
     return out_file_name
 
@@ -652,13 +654,13 @@ def create_comment_chain_video(comment, chain_n):
 
 # TODO partially implemented not working
 def create_final_video(post):
+    global chain_n
     chain_n = 0
     file_names = []
 
     for comment in post['comments']:
-        chain_file_name = create_comment_chain_video(comment, chain_n)
+        chain_file_name = create_comment_chain_video(comment)
         file_names.append(chain_file_name)
-        chain_n += 1
 
     with open(file_names_txt_file, 'w') as f:
         for file_name in file_names:
@@ -675,14 +677,16 @@ if __name__ == '__main__':
     score_limit = 1000
     max_n_replies = 4
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
-        posts = prune_posts(json.load(posts_file), score_limit, max_n_replies)
+        posts = json.load(posts_file)
 
-    comment = posts[0]['comments'][0]
+
+    #comment = posts[0]['comments'][0]
     #for i in range(1, 2):
     #    comment['replies'] += posts[i]['comments'][0]['replies']
     #comment['body'] = cleanup_text(comment['body'])
     #for reply in comment['replies']:
     #    reply['body'] = cleanup_text(reply['body'])
+    #create_comment_chain_video(comment, 1)
 
     #for i in range(1, 2):
     #    for reply in posts[i]['comments'][0]['replies']:
@@ -691,7 +695,11 @@ if __name__ == '__main__':
     #print(comment['body'])
 
 
-    create_comment_chain_video(comment, 1)
-    #create_final_video(posts[0]["comments"][:2])
+    posts[0]['comments'] = posts[0]['comments'][:3]
+    for i in range(len(posts[0]['comments'])):
+        posts[0]['comments'][i]['body'] = cleanup_text(posts[0]['comments'][i]['body'])
+        for j in range(len(posts[0]['comments'][i]['replies'])):
+            posts[0]['comments'][i]['replies'][j] = cleanup_text(posts[0]['comments'][i]['replies'][j]['body'])
+    create_final_video(posts[0])
 
 
