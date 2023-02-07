@@ -138,7 +138,7 @@ def flatten(lst):
     return flattened_list
 
 
-debug = False
+debug = True
 
 def LOG(title, message, pos=''):
     if len(title) > 32:
@@ -169,6 +169,21 @@ def draw_debug_line_x(img, x, color):
     draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
 
 
+def get_paragraphs(content):
+    return [s for s in content.split("\n") if s]
+
+# TODO split on "..." as well
+def get_sentences(content):
+    return [s.strip() + (content[content.find(s)+len(s)]) 
+            for s in re.split("[!?.]", content) if s]
+    #sents = [s for s in re.split("[!?.]", content) if s]
+    #print(sents)
+
+def cleanup_text(text):
+    text = text.strip()
+    if text[-1] not in ['.','!','?']:
+        text += '.'
+    return text
 
 def load_top_posts_and_best_comments(subreddit_name):
     reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
@@ -287,14 +302,6 @@ def time_ago_str(created_utc):
 
 
 
-def get_paragraphs(content):
-    return [s for s in content.split("\n") if s]
-
-# TODO split on "..." as well
-def get_sentences(content):
-    return [s.strip() + (content[content.find(s)+len(s)]) 
-            for s in re.split("[!?.]", content) if s]
-
 def get_text_size_freetype(text, face):
     slot = face.glyph
     width, height, baseline = 0, 0, 0
@@ -302,9 +309,8 @@ def get_text_size_freetype(text, face):
     for i, c in enumerate(text):
         face.load_char(c)
         bitmap = slot.bitmap
-        height = max(height,
-                     bitmap.rows + max(0,-(slot.bitmap_top-bitmap.rows)))
-        baseline = max(baseline, max(0,-(slot.bitmap_top-bitmap.rows)))
+        height = max(height, bitmap.rows + max(0, -(slot.bitmap_top - bitmap.rows)))
+        baseline = max(baseline, max(0, -(slot.bitmap_top - bitmap.rows)))
         kerning = face.get_kerning(previous, c)
         width += (slot.advance.x >> 6) + (kerning.x >> 6)
         previous = c
@@ -544,7 +550,6 @@ def write_comment(comment, img, pos):
     body_height_dbg = comment_body_height(comment['body'], width_box)
     draw_debug_line_y(img, y + body_height_dbg, YELLOW)
     total_height_dbg = total_comment_height(comment, width_box)
-    print(total_height_dbg)
     if comment_n == 0:
         draw_debug_line_y(img, y + total_height_dbg, CYAN)
     else:
@@ -616,7 +621,6 @@ def create_comment_video(comment, img, start):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
     for frame, duration in list(zip(frames, durations)):
-        print(type(frame))
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
         for _ in range(int(fps * duration)):
             out.write(cv2_frame)
@@ -662,28 +666,27 @@ def prune_comment_replies(comment):
 
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment, chain_n):
-    if (more_replies_than_desired(comment)):
-        raise MoreRepliesThanDesiredError("too many replies doofus.")
+    #if (more_replies_than_desired(comment)):
+    #    raise MoreRepliesThanDesiredError("too many replies doofus.")
 
     # scroll pane
     global pane_y, total_chain_height, img_height
-    start_y = int((screen_height / 2) - (total_chain_height / 2))
     img_height = screen_height
     total_chain_height = total_comment_height(comment, (text_start_x, text_width_cutoff))
+    start_y = int((screen_height / 2) - (total_chain_height / 2))
+
     if total_chain_height > text_height_cutoff:
         start_y = text_start_y
         img_height = total_chain_height + (2 * text_start_y)
-    LOG('TEXT START Y', str(text_start_y))
+
+    LOG('START Y', str(start_y))
     LOG('TOTAL CHAIN HEIGHT', str(total_chain_height))
     LOG('IMAGE HEIGHT', str(img_height))
 
     global comment_n
     comment_n = 0
     (x, y) = (text_start_x, start_y)
-    print(img_height)
     img = Image.new("RGBA", (screen_width, img_height), background_color)
-    print(img.height)
-    #img = Image.new("RGBA", (screen_width, img_height), background_color)
 
     end, file_names = create_comment_video(comment, img, (x, y))
 
@@ -722,21 +725,13 @@ if __name__ == '__main__':
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
 
-    comment = posts[0]["comments"][0]
-    #comment['replies'] = [comment['replies'][0]]
-    comment['replies'] = comment['replies'][:3]
-    #comment['replies'][0]['replies'] = []
+    comment = posts[0]['comments'][0]
+    for i in range(1, 2):
+        comment['replies'] += posts[i]['comments'][0]['replies']
+    comment['body'] = cleanup_text(comment['body'])
+    for reply in comment['replies']:
+        reply['body'] = cleanup_text(reply['body'])
 
-    #width_box = (text_start_x, text_width_cutoff)
-    #comment_body = comment['body']
-    #body_height  = comment_body_height(comment_body, width_box)
-    #total_height = total_comment_height(comment, width_box)
-    #line_height  = compute_line_height(comment, width_box)
-    #print(body_height)
-    #print(total_height)
-    #print(line_height)
-
-    #print(comment_body_height(comment['replies'][0]['body'], width_box))
 
     create_comment_chain_video(comment, 1)
     #create_final_video(posts[0]["comments"][:2])
