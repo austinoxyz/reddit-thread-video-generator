@@ -110,8 +110,6 @@ chain_video_name_base   = 'chain'
 
 comment_n = 0
 
-
-
 acronym_map = {
     'OP': 'oh pee',                    'op': 'oh pee',
     'LOL': 'ell oh ell',               'lol': 'ell oh ell',              'Lol': 'el oh el',
@@ -191,66 +189,6 @@ def cleanup_text(text):
     if text[-1] not in ['.','!','?']:
         text += '.'
     return text
-
-def load_top_posts_and_best_comments(subreddit_name):
-    reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
-                         client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
-                         user_agent=   'python-script')
-    subreddit = reddit.subreddit(subreddit_name)
-    posts = subreddit.top(limit=10, time_filter='all')
-    post_data = []
-    for post in posts:
-        print(f"Saving top ten comments from post titled: {post.title}")
-        comments = [comment for comment in post.comments.list() 
-                    if not isinstance(comment, MoreComments)]
-        comments.sort(key=lambda x: x.score, reverse=True)
-        top_comments = comments[:10]
-        comments_data = []
-        for comment in top_comments:
-            # not sure why this is happening to the last comment in the list
-            if comment.author is None:
-                continue
-            subcomments = [subcomment for subcomment in comment.replies.list() 
-                        if not isinstance(subcomment, MoreComments)]
-            subcomments.sort(key=lambda x: x.score, reverse=True)
-            top_subcomments = subcomments[:3]
-            subcomments_data = []
-            for subcomment in top_subcomments:
-                # not sure why this is happening to the last comment in the list
-                if subcomment.author is None:
-                    continue
-                subcomments_data.append({
-                    'author': subcomment.author.name,
-                    'score':  subcomment.score,
-                    'permalink': subcomment.permalink,
-                    'body':   subcomment.body,
-                    'created_utc': subcomment.created_utc,
-                    'id': subcomment.id
-                })
-
-            comments_data.append({
-                'author': comment.author.name,
-                'score':  comment.score,
-                'permalink': comment.permalink,
-                'body':   comment.body,
-                'created_utc': comment.created_utc,
-                'id': comment.id,
-                'replies': subcomments_data
-            })
-        post_data.append({
-            'title': post.title,
-            'score': post.score,
-            'url': post.url,
-            'permalink': post.permalink,
-            'author': post.author.name,
-            'content': post.selftext,
-            'comments': comments_data
-        })
-
-
-    with codecs.open('posts.json', 'w', 'utf-8') as json_file:
-        json.dump(post_data, json_file)
-
 
 
 def create_audio_file(text, file_name):
@@ -587,7 +525,7 @@ def create_comment_frames(comment, img, start):
     draw_sidebar(img, (x, y), line_height)
 
     # draw header
-    draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], True, '')
+    draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], comment['is_submitter'], '')
 
     # write comment and create new frame for each sentence
     frames, (x, y) = write_comment(comment, img, (x, y))
@@ -673,9 +611,6 @@ def more_replies_than_desired(comment):
     #            return True
     return False
 
-def prune_comment_replies(comment):
-    return False
-
 # creates several subvideos and makes a call to ffmpeg to concatenate them
 def create_comment_chain_video(comment, chain_n):
     #if (more_replies_than_desired(comment)):
@@ -716,11 +651,11 @@ def create_comment_chain_video(comment, chain_n):
 
 
 # TODO partially implemented not working
-def create_final_video(comments):
+def create_final_video(post):
     chain_n = 0
     file_names = []
 
-    for comment in comments:
+    for comment in post['comments']:
         chain_file_name = create_comment_chain_video(comment, chain_n)
         file_names.append(chain_file_name)
         chain_n += 1
@@ -730,12 +665,17 @@ def create_final_video(comments):
             f.write('file \'' + file_name + '\'\n')
             f.write('file \'' + static_video_name + '\'\n')
 
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {working_dir}{out_file_name}", shell=True, timeout=120)
+    LOG('CREATING FINAL VIDEO...', '')
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {final_video_name}", shell=True, timeout=120)
+    LOG('FINAL VIDEO CREATED', '')
 
 
 if __name__ == '__main__':
+
+    score_limit = 1000
+    max_n_replies = 4
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
-        posts = json.load(posts_file)
+        posts = prune_posts(json.load(posts_file), score_limit, max_n_replies)
 
     comment = posts[0]['comments'][0]
     #for i in range(1, 2):
@@ -744,11 +684,11 @@ if __name__ == '__main__':
     #for reply in comment['replies']:
     #    reply['body'] = cleanup_text(reply['body'])
 
-    for i in range(1, 2):
-        for reply in posts[i]['comments'][0]['replies']:
-            comment['body'] += cleanup_text(reply['body']) + '\n'
-    comment['body'] = cleanup_text(comment['body'])
-    print(comment['body'])
+    #for i in range(1, 2):
+    #    for reply in posts[i]['comments'][0]['replies']:
+    #        comment['body'] += cleanup_text(reply['body']) + '\n'
+    #comment['body'] = cleanup_text(comment['body'])
+    #print(comment['body'])
 
 
     create_comment_chain_video(comment, 1)
