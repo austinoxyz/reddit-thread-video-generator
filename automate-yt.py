@@ -33,17 +33,23 @@ MAROON = ( 68,   2,   2, 1)
 
 
 # Fonts 
-comment_font = freetype.Face('./Roboto-Regular.ttf')
+comment_font = freetype.Face('./fonts/Roboto-Regular.ttf')
 comment_font_sz = 32
 comment_font.set_char_size(comment_font_sz * 64)
 comment_font.load_char('A')
 comment_font_height = comment_font.height >> 6
 
-header_font = freetype.Face('./Roboto-Regular.ttf')
+header_font = freetype.Face('./fonts/Roboto-Regular.ttf')
 header_font_sz = 24
 header_font.set_char_size(header_font_sz * 64)
 header_font.load_char('A')
 header_font_height = header_font.height >> 6
+
+op_font = freetype.Face('./fonts/Roboto-Bold.ttf')
+op_font_sz = 20
+op_font.set_char_size(op_font_sz * 64)
+op_font.load_char('A')
+op_font_height = op_font.height >> 6
 
 
 # Images
@@ -78,8 +84,8 @@ paragraph_spacing = int(line_spacing * 1.2)
 sentence_end_pad = 25
 
 indent_off  = 50
-header_off  = -50
-sidebar_off = -50, -50
+header_off  = 50
+sidebar_off = 50, 50
 
 vote_img_pad = 100
 comment_end_pad = footer_img.height + 100
@@ -138,7 +144,8 @@ def flatten(lst):
     return flattened_list
 
 
-debug = True
+debug = False
+#debug = True
 
 def LOG(title, message, pos=''):
     if len(title) > 32:
@@ -342,7 +349,7 @@ def comment_body_height(comment_body, width_box):
 
 def compute_comment_height(comment, width_box):
     body_h = comment_body_height(comment['body'], width_box)
-    return -header_off+ body_h + comment_end_pad + header_off
+    return header_off + body_h + comment_end_pad - header_off
 
 
 def total_comment_height(comment, width_box):
@@ -357,19 +364,12 @@ def total_comment_height(comment, width_box):
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
     body_height = comment_body_height(comment['body'], width_box)
-    height = body_height - downvote_img.height + comment_end_pad + header_off - 25
+    height = body_height - downvote_img.height + comment_end_pad - header_off - 25
     if comment.get('replies') is None:
         return height
     for reply in comment['replies']:
         height += total_comment_height(reply, (start_x + indent_off, end_x))
     return height
-
-def compute_start_y(comment):
-    height = total_comment_height(comment, (text_start_x, text_width_cutoff))
-    if height > text_height_cutoff:
-        return text_start_y
-    else:
-        return int((screen_height / 2)  - (height / 2))
 
 
 
@@ -395,8 +395,8 @@ def wrap_text(text, width_box, font, pos):
     wrapped_text.append(line)
     return [line for line in wrapped_text if line != '']
 
-def draw_header(img, pos, username, npoints, created_utc, medals):
-    (x, y) = pos[0], pos[1] + header_off
+def draw_header(img, pos, username, npoints, created_utc, is_submitter, medals):
+    (x, y) = pos[0], pos[1] - header_off
     draw  = ImageDraw.Draw(img)
     draw_debug_line_y(img, y, PINK)
 
@@ -405,13 +405,18 @@ def draw_header(img, pos, username, npoints, created_utc, medals):
     (x, y) = draw_string_to_image('/u/' + username, img, (x, y), header_font, username_color)
     x += 10
 
+    if is_submitter:
+        (x, y) = draw_string_to_image('OP', img, (x, y), op_font, RED)
+        x += 10
+
     # write the points and time duration after the username 
     text_color = (255, 255, 255, 1)
-    string = ' • ' + points_str(npoints) + ' • ' + time_ago_str(created_utc)
+    string = ' •   ' + points_str(npoints) + '   •   ' + time_ago_str(created_utc)
     (x, y) = draw_string_to_image(string, img, (x, y), header_font, text_color)
 
 def draw_sidebar(img, pos, line_height):
-    (x, y) = pos[0] + sidebar_off[0], pos[1] + sidebar_off[1]
+    (x, y) = pos[0] - sidebar_off[0], pos[1] - sidebar_off[1]
+
     # draw upvote/downvote images
     img.paste(upvote_img, (x, y), upvote_img)
     img.paste(downvote_img, (x, y + 50), downvote_img)
@@ -522,15 +527,23 @@ def write_sentence(text, img, pos, width_box, font, color):
 
 def write_paragraph(paragraph, img, pos, width_box, font, color):
     x, y  = pos
-    draw_debug_line_y(img, y, RED)
     start_x, end_x = width_box
+
+    draw_debug_line_y(img, y, RED)
+
+    global pane_y
     frames = []
-    sentences = get_sentences(paragraph)
     LOG('START PARAGRAPH', '', (x, y))
-    for sentence in sentences:
+    for sentence in get_sentences(paragraph):
         (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, color)
-        #frames.append(np.array(img))
         frames.append(np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :])
+        # scroll pane
+        if y - pane_y > text_height_cutoff:
+            if img_height - y < screen_height:
+                pane_y = img_height - screen_height
+            else:
+                pane_y = y - text_start_y
+
     LOG('END PARAGRAPH', '')
     (x, y) = start_x, y + paragraph_spacing
     draw_debug_line_y(img, y, RED)
@@ -574,7 +587,7 @@ def create_comment_frames(comment, img, start):
     draw_sidebar(img, (x, y), line_height)
 
     # draw header
-    draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], '')
+    draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], True, '')
 
     # write comment and create new frame for each sentence
     frames, (x, y) = write_comment(comment, img, (x, y))
@@ -611,7 +624,6 @@ def create_comment_video(comment, img, start):
         if img_height - y < screen_height:
             pane_y = img_height - screen_height
         else:
-            pane_y += (y + comment_height) - (pane_y + screen_height)
             pane_y = y - text_start_y
         LOG('PANE SHIFT', '', (old_pane_y, pane_y))
 
@@ -726,11 +738,11 @@ if __name__ == '__main__':
         posts = json.load(posts_file)
 
     comment = posts[0]['comments'][0]
-    for i in range(1, 2):
-        comment['replies'] += posts[i]['comments'][0]['replies']
-    comment['body'] = cleanup_text(comment['body'])
-    for reply in comment['replies']:
-        reply['body'] = cleanup_text(reply['body'])
+    #for i in range(1, 2):
+    #    comment['replies'] += posts[i]['comments'][0]['replies']
+    #comment['body'] = cleanup_text(comment['body'])
+    #for reply in comment['replies']:
+    #    reply['body'] = cleanup_text(reply['body'])
 
 
     create_comment_chain_video(comment, 1)
