@@ -175,11 +175,12 @@ def draw_debug_line_x(img, x, color):
 
 
 def get_paragraphs(content):
-    return [cleanup_text(s) for s in content.split("\n") if s]
+    result = [cleanup_text(s) for s in re.split("(\n)+", content) if len(s) > 0]
+    print(result)
+    return result
 
 # TODO split on "..." as well
 def get_sentences(content):
-    print(content)
     return [s.strip() + (content[content.find(s)+len(s)]) 
             for s in re.split("[!?.]", content) if s]
     #sents = [s for s in re.split("[!?.]", content) if s]
@@ -618,6 +619,7 @@ def create_comment_chain_video(comment):
 
     # scroll pane
     global pane_y, total_chain_height, img_height
+    pane_y = 0
     img_height = screen_height
     total_chain_height = total_comment_height(comment, (text_start_x, text_width_cutoff))
     start_y = int((screen_height / 2) - (total_chain_height / 2))
@@ -659,6 +661,7 @@ def create_final_video(post):
     file_names = []
 
     for comment in post['comments']:
+        LOG('TYPE OF COMMENT', 'type(comment))')
         chain_file_name = create_comment_chain_video(comment)
         file_names.append(chain_file_name)
 
@@ -671,6 +674,8 @@ def create_final_video(post):
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {final_video_name}", shell=True, timeout=120)
     LOG('FINAL VIDEO CREATED', '')
 
+def test_text_fns(body):
+    print(get_paragraphs(body), end='\n\n')
 
 if __name__ == '__main__':
 
@@ -694,12 +699,24 @@ if __name__ == '__main__':
     #comment['body'] = cleanup_text(comment['body'])
     #print(comment['body'])
 
-
     posts[0]['comments'] = posts[0]['comments'][:3]
     for i in range(len(posts[0]['comments'])):
         posts[0]['comments'][i]['body'] = cleanup_text(posts[0]['comments'][i]['body'])
         for j in range(len(posts[0]['comments'][i]['replies'])):
             posts[0]['comments'][i]['replies'][j] = cleanup_text(posts[0]['comments'][i]['replies'][j]['body'])
-    create_final_video(posts[0])
+
+    # test
+    for i in range(len(posts[0]['comments'])):
+        print('comment: ', end='')
+        print(posts[0]['comments'][i]['body'])
+        print('comment paras: ', end='')
+        print(get_paragraphs(posts[0]['comments'][i]['body']))
+        for j in range(len(posts[0]['comments'][i]['replies'])):
+            print('reply: ', end='')
+            print(posts[0]['comments'][i]['replies'][j]['body'])
+            print('reply paras: ', end='')
+            print(get_paragraphs(posts[0]['comments'][i]['replies'][j]['body']))
+
+    #create_final_video(posts[0])
 
 
