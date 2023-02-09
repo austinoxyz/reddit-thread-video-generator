@@ -69,9 +69,6 @@ def prune_comments(comments):
     for comment in comments:
         if isinstance(comment, MoreComments):
             continue;
-#        if i == 0:
-#            for attribute in dir(comment):
-#                print(attribute)
         if comment.score > score_limit and len(comment.body) <= char_limit:
             # deleted comment
             if comment.author is None:

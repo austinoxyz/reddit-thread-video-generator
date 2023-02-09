@@ -205,6 +205,11 @@ def time_ago_str(created_utc):
         s += 's'
     return str(n) + ' ' + s + ' ago'
 
+def sec_2_vid_dur(sec):
+    sec = int(sec)
+    minutes = sec % 60
+    return str(int(sec) % 60) + ':' + str(int(sec) / 60))
+
 
 
 def get_text_size_freetype(text, face):
@@ -540,7 +545,7 @@ def create_comment_video(comment, img, start):
     frames, (x, y) = create_comment_frames(comment, img, (x, y))
 
     total_duration = sum(durations) / 60.0
-    LOG('WRITING VIDEO', '', (total_duration, total_duration * fps))
+    LOG('WRITING VIDEO', sec_2_vid_dur(total_duration))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
     for frame, duration in list(zip(frames, durations)):
@@ -655,6 +660,8 @@ if __name__ == '__main__':
 
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
+
+    posts[0]['comments'][0]['replies'] += posts[0]['comments'][1]['replies']
     
     create_comment_chain_video(posts[0]['comments'][0])
     #create_final_video(posts[0])
