@@ -4,22 +4,18 @@ import os
 import re
 import time
 import datetime
-
-import praw
-from praw.models import Redditor, Comment, MoreComments
-
 import json
 import codecs
 
+import numpy as np
 import freetype
-
+from PIL import Image, ImageDraw, ImageFont
 from gtts import gTTS
 from pydub import AudioSegment
-
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
 import cv2
 import subprocess
+
+from text_clean import clean_comment_bodies, get_paragraphs, get_sentences
 
 # Colors
 RED    = (255,   0,   0, 1)
@@ -109,6 +105,7 @@ comment_video_name_base = 'comment'
 chain_video_name_base   = 'chain'
 
 comment_n = 0
+chain_n = 0
 
 acronym_map = {
     'OP': 'oh pee',                    'op': 'oh pee',
@@ -172,25 +169,6 @@ def draw_debug_line_x(img, x, color):
     draw = ImageDraw.Draw(img)
     dbg_ln_start, dbg_ln_end = (x, 0), (x, screen_height)
     draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
-
-
-def get_paragraphs(content):
-    result = [cleanup_text(s) for s in re.split("(\n)+", content) if len(s) > 0]
-    print(result)
-    return result
-
-# TODO split on "..." as well
-def get_sentences(content):
-    return [s.strip() + (content[content.find(s)+len(s)]) 
-            for s in re.split("[!?.]", content) if s]
-    #sents = [s for s in re.split("[!?.]", content) if s]
-    #print(sents)
-
-def cleanup_text(text):
-    text = text.strip()
-    if text[-1] not in ['.','!','?']:
-        text += '.'
-    return text
 
 
 def create_audio_file(text, file_name):
@@ -569,6 +547,8 @@ def create_comment_video(comment, img, start):
     durations      = create_comment_audio(comment['body'])
     frames, (x, y) = create_comment_frames(comment, img, (x, y))
 
+    total_duration = sum(durations) / 60.0
+    LOG('WRITING VIDEO', '', (total_duration, total_duration * fps))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
     for frame, duration in list(zip(frames, durations)):
@@ -581,7 +561,7 @@ def create_comment_video(comment, img, start):
     global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
     #subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name}", shell=True, timeout=120)
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=300)
     LOG('VIDEO CREATED', out_file_name)
     comment_n += 1
 
@@ -674,9 +654,6 @@ def create_final_video(post):
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {final_video_name}", shell=True, timeout=120)
     LOG('FINAL VIDEO CREATED', '')
 
-def test_text_fns(body):
-    print(get_paragraphs(body), end='\n\n')
-
 if __name__ == '__main__':
 
     score_limit = 1000
@@ -684,39 +661,11 @@ if __name__ == '__main__':
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
 
-
-    #comment = posts[0]['comments'][0]
-    #for i in range(1, 2):
-    #    comment['replies'] += posts[i]['comments'][0]['replies']
-    #comment['body'] = cleanup_text(comment['body'])
-    #for reply in comment['replies']:
-    #    reply['body'] = cleanup_text(reply['body'])
-    #create_comment_chain_video(comment, 1)
-
-    #for i in range(1, 2):
-    #    for reply in posts[i]['comments'][0]['replies']:
-    #        comment['body'] += cleanup_text(reply['body']) + '\n'
-    #comment['body'] = cleanup_text(comment['body'])
-    #print(comment['body'])
-
-    posts[0]['comments'] = posts[0]['comments'][:3]
-    for i in range(len(posts[0]['comments'])):
-        posts[0]['comments'][i]['body'] = cleanup_text(posts[0]['comments'][i]['body'])
-        for j in range(len(posts[0]['comments'][i]['replies'])):
-            posts[0]['comments'][i]['replies'][j] = cleanup_text(posts[0]['comments'][i]['replies'][j]['body'])
-
-    # test
-    for i in range(len(posts[0]['comments'])):
-        print('comment: ', end='')
-        print(posts[0]['comments'][i]['body'])
-        print('comment paras: ', end='')
-        print(get_paragraphs(posts[0]['comments'][i]['body']))
-        for j in range(len(posts[0]['comments'][i]['replies'])):
-            print('reply: ', end='')
-            print(posts[0]['comments'][i]['replies'][j]['body'])
-            print('reply paras: ', end='')
-            print(get_paragraphs(posts[0]['comments'][i]['replies'][j]['body']))
-
+    for comment in posts[0]['comments']:
+        clean_comment_bodies(comment)
+        print(comment['body'])
+    
+    create_comment_chain_video(posts[0]['comments'][0])
     #create_final_video(posts[0])
 
 

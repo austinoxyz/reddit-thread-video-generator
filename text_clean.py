@@ -25,26 +25,25 @@ def get_paragraphs(text):
 
 sent_delims = ['.', '!', '?', ':', ';', ',', '-']
 
-def get_sentences(paras):
+def get_sentences(para):
     sentences = []
     sent, word = '', ''
-    for para in paras:
-        for i, c in enumerate(para):
-            if c == ' ':
-                sent += word + ' '
-                word = ''
-                continue;
-            elif c in sent_delims:
-                # hyphens are tricky
-                if c == '-' and i != len(para) - 1 and para[i+1] != ' ':
-                    word += c
-                    continue;
-                sent += word
-                sentences.append(sent + c)
-                word = ''
-                sent = ''
-            else:
+    for i, c in enumerate(para):
+        if c == ' ':
+            sent += word + ' '
+            word = ''
+            continue;
+        elif c in sent_delims:
+            # hyphens are tricky
+            if c == '-' and i != len(para) - 1 and para[i+1] != ' ':
                 word += c
+                continue;
+            sent += word
+            sentences.append(sent + c)
+            word = ''
+            sent = ''
+        else:
+            word += c
     sentences = [s.strip() for s in sentences if s]
 
     modifications = []
@@ -71,8 +70,15 @@ def clean_comment_body(body):
     body = add_punctuation_to_paragraphs(body)
     return body
 
+def clean_comment_bodies(comment):
+    comment['body'] = clean_comment_body(comment['body'])
+    if 'replies' in comment['replies']:
+        for reply in comment:
+            clean_comment_bodies(reply)
+
 if __name__ == '__main__':
     test_text = clean_comment_body(test_text)
     paras = get_paragraphs(test_text)
-    sentences = get_sentences(paras)
+    sentences = get_sentences(paras[2])
+    print(sentences)
 
