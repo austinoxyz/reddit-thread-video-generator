@@ -62,10 +62,6 @@ def add_punctuation_to_paragraphs(text):
     text = text.strip()
     paras = get_paragraphs(text)
     for i, para in enumerate(paras):
-        if len(para) < 5:
-            for c in para:
-                print(str(ord(c)) + ', ', end='')
-            print('\n')
         if para[-1] not in ['.','!','?',':','-']:
             paras[i] += '.'
     return '\n'.join(paras)
@@ -73,14 +69,10 @@ def add_punctuation_to_paragraphs(text):
 def clean_comment_body(body):
     body = remove_markdown_links(body)
     body = add_punctuation_to_paragraphs(body)
+    return body
 
-test_text = remove_markdown_links(test_text)
-test_text = add_punctuation_to_paragraphs(test_text)
-
-paras = get_paragraphs(test_text)
-print(paras, end='\n\n')
-
-sentences = get_sentences(paras)
-for s in sentences:
-    print(s, end='\n\n')
+if __name__ == '__main__':
+    test_text = clean_comment_body(test_text)
+    paras = get_paragraphs(test_text)
+    sentences = get_sentences(paras)
 
