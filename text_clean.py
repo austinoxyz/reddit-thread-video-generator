@@ -1,3 +1,8 @@
+# text_clean.py
+
+import re
+
+# good for testing a comment with a good amount of Markdown
 test_text = "NTA\n\n\
 This is a recurring theme here on Reddit, people do not consider themselves thieves:\n\n\
 > Sammy and his daughters saw the lock and weren't happy, the girls were extremely upset. Sammy asked about it and I straight up told him. He said \"my daughters aren't thieves!!!\n\n\
@@ -13,9 +18,43 @@ Instead of talking to his kids, he *blames the victim*. \"We took her stuff, bec
 Not only does Sammy refuse to teach *his* kids not to take other people's things, he also considers *you* to be a bad parent. Even *if* you were incorrect in how you raise your kid, even *if* it would be better if your daughter shared her make-up, he is in *no position* to demand it, and his daughters, who are *guests in your house*, should follow reasonable \"house rules\".\n\n\
 Your wife is choosing her brother over her daughter (and you), and hasn't thought things through. What if they next go through *her* things? What if Sammy next goes through her underwear?!? Where does it end? Expecting people not to go through other people's stuff in perfectly reasonable. Sammy is an entitled ass.\n\n"
 
-#..of it. -- [Theft - Wikipedia](https://en.wikipedia.org/wiki/Theft)
+acronym_map = {
+    'OP': 'oh pee',
+    'LOL': 'ell oh ell',
+    'IIRC': 'if i recall correctly',
+    'AFAIK': 'as far as i know',
+    'DAE': 'does anyone else',
+    'ICYMI': 'in case you missed it',
+    'TLDR': 'too long didnt read',
+    'TL;DR': 'too long didnt read',
+    'TIL': 'today i learned',
+    'IDK': 'i dont know',
+    'NGL': 'not gonna lie',
+    'LPT': 'life pro tip',
+    'AITA': 'am i the asshole',
+    'YTA': 'you\'re the asshole',
+    'NTA': 'not the asshole',
+    'AH': 'asshole',
+    'BIL': 'brother in law', 'BiL': 'brother in law', 
+    'SIL': 'sister in law', 'SiL': 'sister in law', 
+    'FIL': 'father in law', 'FiL': 'father in law', 
+    'MIL': 'mother in law', 'MiL': 'mother in law', 
+    'DIL': 'daughter in law', 'DiL': 'daughter in law', 
+    'AIL': 'aunt in law', 'AiL': 'aunt in law', 
+    'UIL': 'uncle in law', 'UiL': 'uncle in law', 
+}
+def fill_acronym_map():
+    more_acronyms = {}
+    for acronym, expansion in acronym_map.items():
+        more_acronyms[acronym.lower()] = expansion
+    acronym_map.update(more_acronyms)
+fill_acronym_map()
 
-import re
+
+def replace_acronyms(text):
+    words = re.findall(r'\b\w+\b', text)
+    pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
+    return re.sub(pattern, lambda x: acronym_map[x.group()], text)
 
 def remove_markdown_links(text):
     return re.sub(r"\(https://.*\)", '', text)
@@ -23,8 +62,8 @@ def remove_markdown_links(text):
 def get_paragraphs(text):
     return [s for s in re.split('(\n)+', text) if re.search(r"\S", s)]
 
-sent_delims = ['.', '!', '?', ':', ';', ',', '-']
 
+sent_delims = ['.', '!', '?', ':', ';', ',', '-']
 def get_sentences(para):
     sentences = []
     sent, word = '', ''
@@ -34,7 +73,8 @@ def get_sentences(para):
             word = ''
             continue;
         elif c in sent_delims:
-            # hyphens are tricky
+            # hyphens are tricky- 
+            # sometimes they are used mid-clause; sometimes they are used to end a clause.
             if c == '-' and i != len(para) - 1 and para[i+1] != ' ':
                 word += c
                 continue;

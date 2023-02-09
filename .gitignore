@@ -3,5 +3,6 @@ build-vid/
 res/
 test/
 __pycache__/
+
 posts.json
 posts.pretty.json

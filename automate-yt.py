@@ -15,7 +15,8 @@ from pydub import AudioSegment
 import cv2
 import subprocess
 
-from text_clean import clean_comment_bodies, get_paragraphs, get_sentences
+from load_posts import save_top_posts_and_best_comments
+from text_clean import clean_comment_bodies, get_paragraphs, get_sentences, replace_acronyms
 
 # Colors
 RED    = (255,   0,   0, 1)
@@ -106,28 +107,6 @@ chain_video_name_base   = 'chain'
 
 comment_n = 0
 chain_n = 0
-
-acronym_map = {
-    'OP': 'oh pee',                    'op': 'oh pee',
-    'LOL': 'ell oh ell',               'lol': 'ell oh ell',              'Lol': 'el oh el',
-    'IIRC': 'if i recall correctly',   'iirc': 'if i recall correctly',
-    'AFAIK': 'as far as i know',       'afaik': 'as far as i know',
-    'DAE': 'does anyone else',         'dae': 'does anyone else',
-    'ICYMI': 'in case you missed it',  'icymi': 'in case you missed it',
-    'tldr': 'too long didnt read',     'TL;DR': 'too long didnt read',
-    'TIL': 'today i learned',          'til': 'today i learned',
-    'IDK': 'i dont know',              'idk': 'i dont know',
-    'NGL': 'not gonna lie',            'ngl': 'not gonna lie',
-    'LPT': 'life pro tip',             'lpt': 'life pro tip',
-    'AITA': 'am i the asshole',        'aita': 'am i the asshole',
-    'YTA': 'you\'re the asshole',      'yta': 'you\'re the asshole',
-    'NTA': 'not the asshole',          'nta': 'not the asshole',
-}
-
-def replace_acronyms(text):
-    words = re.findall(r'\b\w+\b', text)
-    pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
-    return re.sub(pattern, lambda x: acronym_map[x.group()], text)
 
 def flatten(lst):
     flattened_list = []
