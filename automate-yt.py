@@ -1,5 +1,6 @@
 # automate-youtube.py
 
+import math
 import os
 import re
 import time
@@ -178,12 +179,14 @@ def create_comment_audio(comment_body):
 def points_str(npoints):
     multiplier = ''
     if npoints >= 1000000:
-        npoints = npoints // 100000
+        first = npoints // 100000
+        second = ((npoints // 1000) % 1000) // 10
         multiplier = 'm'
     elif npoints >= 1000:
-        npoints = npoints // 1000
+        first = npoints // 1000
+        second = (npoints % 1000) // 10
         multiplier = 'k'
-    return str(npoints)[:-1] + '.' + str(npoints)[-1] + multiplier + ' points'
+    return str(first) + '.' + str(second) + multiplier + ' points'
 
 def time_ago_str(created_utc):
     time_ago = int(time.time()) - int(created_utc)
@@ -205,10 +208,9 @@ def time_ago_str(created_utc):
         s += 's'
     return str(n) + ' ' + s + ' ago'
 
-def sec_2_vid_dur(sec):
-    sec = int(sec)
-    minutes = sec % 60
-    return str(int(sec) % 60) + ':' + str(int(sec) / 60))
+def sec_2_vid_duration(sec):
+    minutes = sec / 60
+    return str(int(math.floor(int(sec) / 60))) + ':' + str(int(sec) % 60)
 
 
 
@@ -544,8 +546,7 @@ def create_comment_video(comment, img, start):
     durations      = create_comment_audio(comment['body'])
     frames, (x, y) = create_comment_frames(comment, img, (x, y))
 
-    total_duration = sum(durations) / 60.0
-    LOG('WRITING VIDEO', sec_2_vid_dur(total_duration))
+    LOG('WRITING VIDEO', sec_2_vid_duration(sum(durations)))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
     for frame, duration in list(zip(frames, durations)):
@@ -661,7 +662,8 @@ if __name__ == '__main__':
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
 
-    posts[0]['comments'][0]['replies'] += posts[0]['comments'][1]['replies']
+    # uncomment for a long video that should take roughly 3:14 seconds to generate
+    #posts[0]['comments'][0]['replies'] += posts[0]['comments'][1]['replies']
     
     create_comment_chain_video(posts[0]['comments'][0])
     #create_final_video(posts[0])

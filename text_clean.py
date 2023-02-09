@@ -1,8 +1,10 @@
 # text_clean.py
 
 import re
+import codecs
+import json
 
-# good for testing a comment with a good amount of Markdown
+# good for testing a comment with a lot of Markdown
 test_text = "NTA\n\n\
 This is a recurring theme here on Reddit, people do not consider themselves thieves:\n\n\
 > Sammy and his daughters saw the lock and weren't happy, the girls were extremely upset. Sammy asked about it and I straight up told him. He said \"my daughters aren't thieves!!!\n\n\
@@ -43,6 +45,7 @@ acronym_map = {
     'AIL': 'aunt in law', 'AiL': 'aunt in law', 
     'UIL': 'uncle in law', 'UiL': 'uncle in law', 
 }
+
 def fill_acronym_map():
     more_acronyms = {}
     for acronym, expansion in acronym_map.items():
@@ -50,18 +53,25 @@ def fill_acronym_map():
     acronym_map.update(more_acronyms)
 fill_acronym_map()
 
-
 def replace_acronyms(text):
-    words = re.findall(r'\b\w+\b', text)
+#    words = re.findall(r'\b\w+\b', text)
     pattern = r'\b(' + '|'.join(acronym_map.keys()) + r')\b'
     return re.sub(pattern, lambda x: acronym_map[x.group()], text)
+
+curse_words = []
+def read_in_curse_words():
+    with codecs.open('curse_words.json', 'r', 'utf-8') as curse_file:
+        curse_words = json.load(curse_file)
+read_in_curse_words()
+
+def split_on_curse_words(text):
+    return False
 
 def remove_markdown_links(text):
     return re.sub(r"\(https://.*\)", '', text)
 
 def get_paragraphs(text):
     return [s for s in re.split('(\n)+', text) if re.search(r"\S", s)]
-
 
 sent_delims = ['.', '!', '?', ':', ';', ',', '-']
 def get_sentences(para):
