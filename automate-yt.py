@@ -27,6 +27,7 @@ PINK   = (252,  17, 154, 1)
 YELLOW = (252, 248,  22, 1)
 ORANGE = (252, 127,  17, 1)
 MAROON = ( 68,   2,   2, 1)
+GRAY   = (153, 153, 153, 1)
 
 
 # Fonts 
@@ -51,15 +52,15 @@ op_font_height = op_font.height >> 6
 
 # Images
 upvote_img = Image.open('./res/upvote.png').convert("RGBA")
-upvote_dim = (int(upvote_img.width / 5), int(upvote_img.height / 5))
+upvote_dim = (38, 38)
 upvote_img = upvote_img.resize(upvote_dim)
 
 downvote_img  = Image.open('./res/downvote.png').convert("RGBA")
-downvote_dim = (int(downvote_img.width / 5), int(downvote_img.height / 5))
+downvote_dim = (38, 38)
 downvote_img  = downvote_img.resize(downvote_dim)
 
 footer_img  = Image.open('./res/comment_footer.png').convert("RGBA")
-footer_img_dim = (int(footer_img.width / 2), int(footer_img.height / 2))
+footer_img_dim = (578, 48)
 footer_img = footer_img.resize(footer_img_dim)
 
 
@@ -292,7 +293,7 @@ def wrap_text(text, width_box, font, pos):
     wrapped_text.append(line)
     return [line for line in wrapped_text if line != '']
 
-def draw_header(img, pos, username, npoints, created_utc, is_submitter, medals):
+def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
     (x, y) = pos[0], pos[1] - header_off
     draw  = ImageDraw.Draw(img)
     draw_debug_line_y(img, y, PINK)
@@ -310,6 +311,18 @@ def draw_header(img, pos, username, npoints, created_utc, is_submitter, medals):
     text_color = (255, 255, 255, 1)
     string = ' •   ' + points_str(npoints) + '   •   ' + time_ago_str(created_utc)
     (x, y) = draw_string_to_image(string, img, (x, y), header_font, text_color)
+    x += 10
+
+    # paste the medals
+    for award in awards:
+        award_img = Image.open('./res/awards/' + award['id'] + '.png').convert("RGBA")
+        award_dim = (48, 48)
+        award_img = award_img.resize(award_dim)
+        img.paste(award_img, (x, y - int(award_dim[1] / 3)), award_img)
+        x += award_dim[0] + 5
+        if award['count'] > 1:
+            (x, y) = draw_string_to_image(str(award['count']), img, (x, y), header_font, GRAY)
+            x += 10
 
 def draw_sidebar(img, pos, line_height):
     (x, y) = pos[0] - sidebar_off[0], pos[1] - sidebar_off[1]
@@ -484,7 +497,7 @@ def create_comment_frames(comment, img, start):
     draw_sidebar(img, (x, y), line_height)
 
     # draw header
-    draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], comment['is_submitter'], '')
+    draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], comment['is_submitter'], comment['awards'])
 
     # write comment and create new frame for each sentence
     frames, (x, y) = write_comment(comment, img, (x, y))
@@ -642,7 +655,6 @@ if __name__ == '__main__':
 
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
-        print(comment['body'])
     
     create_comment_chain_video(posts[0]['comments'][0])
     #create_final_video(posts[0])

@@ -24,7 +24,7 @@ def save_awards_retrieved():
 
 def load_awards_retrieved():
     with open(awards_retrieved_fname, 'r') as retrieved_f:
-        awards_retrieve = [line.strip() for line in retrieved_f.readlines()]
+        awards_retrieved = [line.strip() for line in retrieved_f.readlines()]
 
 def retrieve_award_icon(award_id, url):
     response = requests.get(url)
@@ -38,7 +38,7 @@ def get_awards(comment):
             # this line assumes reddit api will always populates this key
             # with dictionaries and only provides one dict with width key equal to 48
             url = [url_dict['url'] for url_dict in award['resized_static_icons'] 
-                        if url_dict['width'] == 48][0]
+                        if url_dict['width'] == 128][0]
             retrieve_award_icon(award['id'], url)
         awards.append({
             'id': award['id'],
@@ -122,6 +122,7 @@ def prune_replies(replies):
     return top_replies
 
 def save_top_posts_and_best_comments(subreddit_name):
+    load_awards_retrieved()
     reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
                          client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
                          user_agent=   'python-script')
@@ -131,6 +132,7 @@ def save_top_posts_and_best_comments(subreddit_name):
     posts_data = prune_posts(posts)
     with codecs.open('posts.json', 'w', 'utf-8') as json_file:
         json.dump(posts_data, json_file)
+    save_awards_retrieved()
 
 if __name__ == '__main__':
     save_top_posts_and_best_comments('AmItheAsshole')
