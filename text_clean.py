@@ -46,10 +46,13 @@ acronym_map = {
     'UIL': 'uncle in law', 'UiL': 'uncle in law', 
 }
 
+dont_expand_these_acronyms_when_lowercase = ['TIL']
+
 def fill_acronym_map():
     more_acronyms = {}
     for acronym, expansion in acronym_map.items():
-        more_acronyms[acronym.lower()] = expansion
+        if acronym not in dont_expand_these_acronyms_when_lowercase:
+            more_acronyms[acronym.lower()] = expansion
     acronym_map.update(more_acronyms)
 fill_acronym_map()
 

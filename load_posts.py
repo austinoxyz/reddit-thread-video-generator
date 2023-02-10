@@ -31,6 +31,7 @@ def retrieve_award_icon(award_id, url):
     with open(awards_dir + award_id + '.png', 'wb') as award_icon_f:
         award_icon_f.write(response.content)
 
+# also works for posts lol
 def get_awards(comment):
     awards = []
     for award in comment.all_awardings:
@@ -57,6 +58,13 @@ def prune_posts(posts):
             'permalink': post.permalink,
             'author': post.author.name,
             'content': post.selftext,
+            'subreddit': post.subreddit.name,
+            'total_awards': post.total_awards_received,
+            'created_utc': post.created_utc,
+            'gildings': post.gildings,
+            'awards': get_awards(post),
+            'selftext': post.selftext,
+            'num_comments': post.num_comments,
 
             # will call similar function on each reply in forest
             'comments': prune_comments(post.comments)
@@ -110,7 +118,6 @@ def prune_replies(replies):
                 'is_submitter': reply.is_submitter,
                 'edited': reply.edited,
                 'awards': get_awards(reply),
-
                 # call this function recursively
                 'replies': prune_replies(reply.replies)
             })
@@ -124,8 +131,8 @@ def save_top_posts_and_best_comments(subreddit_name):
                          client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
                          user_agent=   'python-script')
     subreddit = reddit.subreddit(subreddit_name)
-    #posts = subreddit.top(limit=10, time_filter='all')
-    posts = subreddit.top(limit=1, time_filter='all')
+    posts = subreddit.top(limit=10, time_filter='all')
+    #posts = subreddit.top(limit=1, time_filter='all')
     posts_data = prune_posts(posts)
     with codecs.open('posts.json', 'w', 'utf-8') as json_file:
         json.dump(posts_data, json_file)

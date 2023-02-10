@@ -29,9 +29,31 @@ YELLOW = (252, 248,  22, 1)
 ORANGE = (252, 127,  17, 1)
 MAROON = ( 68,   2,   2, 1)
 GRAY   = (153, 153, 153, 1)
+WHITE  = (255, 255, 255, 1)
+BLACK  = (  0,   0,   0, 1)
+
+BACKGROUND = (26, 26, 27, 0)
 
 
 # Fonts 
+title_font = freetype.Face('./fonts/Roboto-Regular.ttf')
+title_font_sz = 40
+title_font.set_char_size(title_font_sz * 64)
+title_font.load_char('A')
+title_font_height = title_font.height >> 6
+
+sub_font = freetype.Face('./fonts/Roboto-Bold.ttf')
+sub_font_sz = 32
+sub_font.set_char_size(sub_font_sz * 64)
+sub_font.load_char('A')
+sub_font_height = sub_font.height >> 6
+
+title_header_font = freetype.Face('./fonts/Roboto-Regular.ttf')
+title_header_font_sz = 28
+title_header_font.set_char_size(title_header_font_sz * 64)
+title_header_font.load_char('A')
+title_header_font_height = title_header_font.height >> 6
+
 comment_font = freetype.Face('./fonts/Roboto-Regular.ttf')
 comment_font_sz = 32
 comment_font.set_char_size(comment_font_sz * 64)
@@ -69,7 +91,6 @@ footer_img = footer_img.resize(footer_img_dim)
 screen_height, screen_width = 1080, 1920 
 aspect = float(screen_width / screen_height)
 fps = 30
-background_color = (26, 26, 27, 0)
 
 text_width_cutoff  = int(screen_width * 0.96)
 text_height_cutoff = int(screen_height * 0.85)
@@ -97,6 +118,10 @@ img_height = 0
 # Project Structure
 working_dir = 'build-vid/'
 temp_dir    = working_dir + 'tmp/'
+
+title_audio_name     = 'title.mp3'
+na_title_video_name  = 'na_title_card.mp4'
+title_card_file_name = 'title_card.mp4'
 
 file_names_txt_file = working_dir + 'comment_videos.txt'
 
@@ -210,7 +235,7 @@ def time_ago_str(created_utc):
 
 def sec_2_vid_duration(sec):
     minutes = sec / 60
-    return str(int(math.floor(int(sec) / 60))) + ':' + str(int(sec) % 60)
+    return str(int(math.floor(int(sec) / 60))) + ':' + '{:0>2}'.format(str(int(sec) % 60))
 
 
 
@@ -276,8 +301,6 @@ def compute_line_height(comment, width_box):
         height += total_comment_height(reply, (start_x + indent_off, end_x))
     return height
 
-
-
 def wrap_text(text, width_box, font, pos):
     wrapped_text = []
     line = ''
@@ -300,6 +323,20 @@ def wrap_text(text, width_box, font, pos):
     wrapped_text.append(line)
     return [line for line in wrapped_text if line != '']
 
+def draw_awards(img, pos, awards):
+    (x, y) = pos
+    for award in awards:
+        award_img = Image.open('./res/awards/' + award['id'] + '.png').convert("RGBA")
+        award_dim = (48, 48)
+        award_img = award_img.resize(award_dim)
+        img.paste(award_img, (x, y - int(award_dim[1] / 3)), award_img)
+        x += award_dim[0]
+        if award['count'] > 1:
+            x += 5
+            (x, y) = draw_string_to_image(str(award['count']), img, (x, y), header_font, GRAY)
+        x += 10
+    return (x, y)
+
 def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
     (x, y) = pos[0], pos[1] - header_off
     draw  = ImageDraw.Draw(img)
@@ -307,7 +344,7 @@ def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
 
     # write the username above the image
     username_color = (22, 210, 252, 1)
-    (x, y) = draw_string_to_image('/u/' + username, img, (x, y), header_font, username_color)
+    (x, y) = draw_string_to_image('u/' + username, img, (x, y), header_font, username_color)
     x += 10
 
     if is_submitter:
@@ -315,21 +352,12 @@ def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
         x += 10
 
     # write the points and time duration after the username 
-    text_color = (255, 255, 255, 1)
     string = ' •   ' + points_str(npoints) + '   •   ' + time_ago_str(created_utc)
-    (x, y) = draw_string_to_image(string, img, (x, y), header_font, text_color)
+    (x, y) = draw_string_to_image(string, img, (x, y), header_font, WHITE)
     x += 10
 
     # paste the medals
-    for award in awards:
-        award_img = Image.open('./res/awards/' + award['id'] + '.png').convert("RGBA")
-        award_dim = (48, 48)
-        award_img = award_img.resize(award_dim)
-        img.paste(award_img, (x, y - int(award_dim[1] / 3)), award_img)
-        x += award_dim[0] + 5
-        if award['count'] > 1:
-            (x, y) = draw_string_to_image(str(award['count']), img, (x, y), header_font, GRAY)
-            x += 10
+    draw_awards(img, (x, y), awards)
 
 def draw_sidebar(img, pos, line_height):
     (x, y) = pos[0] - sidebar_off[0], pos[1] - sidebar_off[1]
@@ -558,8 +586,9 @@ def create_comment_video(comment, img, start):
 
     global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
-    #subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name}", shell=True, timeout=120)
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=300)
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} \
+                    -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", 
+                   shell=True, timeout=300)
     LOG('VIDEO CREATED', out_file_name)
     comment_n += 1
 
@@ -613,7 +642,7 @@ def create_comment_chain_video(comment):
     global comment_n
     comment_n = 0
     (x, y) = (text_start_x, start_y)
-    img = Image.new("RGBA", (screen_width, img_height), background_color)
+    img = Image.new("RGBA", (screen_width, img_height), BACKGROUND)
 
     end, file_names = create_comment_video(comment, img, (x, y))
 
@@ -623,13 +652,64 @@ def create_comment_chain_video(comment):
 
     global chain_n
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
-    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name}", shell=True, timeout=120)
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy ./{working_dir}{out_file_name} > /dev/null 2>&1", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
+                    ./{working_dir}{out_file_name} > /dev/null 2>&1", 
+                   shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
     chain_n += 1
 
     return out_file_name
 
+def draw_title_header(img, pos, subreddit, username, created_utc, awards):
+    (x, y) = pos[0] + 50, pos[1] - header_off
+
+    (x, y) = draw_string_to_image('r/' + subreddit, img, (x, y), sub_font, WHITE)
+    x += 10
+
+    string = ' •   Posted by u/' + username + '   •   ' + time_ago_str(created_utc)
+    (x, y) = draw_string_to_image(string, img, (x, y), title_header_font, GRAY)
+    x += 10
+
+    draw_awards(img, (x, y), awards)
+    return False
+
+def draw_title_sidebar(img, pos, score):
+    return False
+
+def draw_title_footer(img, pos, num_comments):
+    return False
+
+def create_title_frame(post):
+    img = Image.new("RGBA", (screen_width, screen_height), BACKGROUND)
+    (x, y) = (text_start_x, int(screen_height / 3))
+    width_box = (x, text_width_cutoff)
+    draw_title_header(img, (x, y), post['subreddit'], post['author'], 
+                      post['created_utc'], post['awards'])
+    draw_title_sidebar(img, (x, y), post['score'])
+    (x, y) = write_sentence(post['title'], img, (x, y), width_box, title_font, WHITE)
+    draw_title_footer(img, (x, y), post['num_comments'])
+    return np.array(img)
+
+
+def create_title_video(post):
+    title_audio_name     = 'title.mp3'
+    na_title_video_name  = 'na_title_card.mp4'
+    title_card_file_name = 'title_card.mp4'
+
+    frame = create_title_frame(post)
+    duration = create_audio_file(post['title'], title_audio_name)
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out    = cv2.VideoWriter(os.path.join(temp_dir, na_title_video_name), fourcc, fps, (screen_width, screen_height))
+    frame  = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+    for _ in range(int(fps * duration)):
+        out.write(frame)
+    out.release()
+    cv2.destroyAllWindows()
+
+    subprocess.run(f"ffmpeg -i {temp_dir}{na_title_video_name} -i {temp_dir}{title_audio_name} \
+            -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{title_card_file_name}", 
+            shell=True, timeout=300)
 
 
 # TODO partially implemented not working
@@ -644,12 +724,14 @@ def create_final_video(post):
         file_names.append(chain_file_name)
 
     with open(file_names_txt_file, 'w') as f:
+        f.write('file \'' + title_card_file_name + '\'\n')
         for file_name in file_names:
             f.write('file \'' + file_name + '\'\n')
             f.write('file \'' + static_video_name + '\'\n')
 
     LOG('CREATING FINAL VIDEO...', '')
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {final_video_name}", shell=True, timeout=120)
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {final_video_name}", 
+                   shell=True, timeout=120)
     LOG('FINAL VIDEO CREATED', '')
 
 if __name__ == '__main__':
@@ -662,10 +744,13 @@ if __name__ == '__main__':
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
 
+
+    create_title_video(posts[0])
+    
     # uncomment for a long video that should take roughly 3:14 seconds to generate
     #posts[0]['comments'][0]['replies'] += posts[0]['comments'][1]['replies']
-    
-    create_comment_chain_video(posts[0]['comments'][0])
+    #create_comment_chain_video(posts[0]['comments'][0])
+
     #create_final_video(posts[0])
 
 
