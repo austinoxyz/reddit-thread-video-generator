@@ -34,6 +34,7 @@ acronym_map = {
     'NGL': 'not gonna lie',
     'LPT': 'life pro tip',
     'AITA': 'am i the asshole',
+    'WIBTA': 'would i be the asshole',
     'YTA': 'you\'re the asshole',
     'NTA': 'not the asshole',
     'AH': 'asshole',
@@ -93,8 +94,7 @@ def get_sentences(para):
                 continue;
             sent += word
             sentences.append(sent + c)
-            word = ''
-            sent = ''
+            word = sent = ''
         else:
             word += c
     sentences = [s.strip() for s in sentences if s]

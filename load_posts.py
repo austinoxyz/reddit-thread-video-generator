@@ -31,6 +31,15 @@ def retrieve_award_icon(award_id, url):
     with open(awards_dir + award_id + '.png', 'wb') as award_icon_f:
         award_icon_f.write(response.content)
 
+def move_elements_to_front(lst, order):
+    moved = []
+    for move_id in order:
+        for award in lst:
+            if award['id'] == move_id:
+                lst.remove(award)
+                moved.append(award)
+    return moved + lst
+
 # also works for posts lol
 def get_awards(comment):
     awards = []
@@ -45,11 +54,13 @@ def get_awards(comment):
             'id': award['id'],
             'count': award['count'],
         })
-    return awards
+    return move_elements_to_front(awards, ['gid_3', 'gid_2', 'gid_1'])
+    #return awards
 
 def prune_posts(posts):
     top_posts = []
     for post in posts:
+        print(f"Pruning post titled:  {post.title[:20]}...")
         post.comments.replace_more(limit=0)
         top_posts.append({
             'title': post.title,
@@ -58,7 +69,7 @@ def prune_posts(posts):
             'permalink': post.permalink,
             'author': post.author.name,
             'content': post.selftext,
-            'subreddit': post.subreddit.name,
+            'subreddit': post.subreddit.display_name,
             'total_awards': post.total_awards_received,
             'created_utc': post.created_utc,
             'gildings': post.gildings,
@@ -73,7 +84,6 @@ def prune_posts(posts):
 
 def prune_comments(comments):
     top_comments = []
-    print(comments)
     for comment in comments:
         if isinstance(comment, MoreComments):
             continue;

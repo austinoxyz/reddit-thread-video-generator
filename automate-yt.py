@@ -37,7 +37,7 @@ BACKGROUND = (26, 26, 27, 0)
 
 # Fonts 
 title_font = freetype.Face('./fonts/Roboto-Regular.ttf')
-title_font_sz = 40
+title_font_sz = 64
 title_font.set_char_size(title_font_sz * 64)
 title_font.load_char('A')
 title_font_height = title_font.height >> 6
@@ -98,8 +98,6 @@ text_start_x  = screen_width - text_width_cutoff
 text_start_y  = screen_height - text_height_cutoff
 
 magic_spacing_coefficient = 1.2
-line_spacing = int((comment_font.height >> 6) * magic_spacing_coefficient)
-paragraph_spacing = int(line_spacing * 1.2)
 
 sentence_end_pad = 25
 
@@ -256,6 +254,7 @@ def get_text_size_freetype(text, face):
 def comment_body_height(comment_body, width_box):
     start_x, end_x = width_box
     x, y = start_x, 0
+    spacing = int((comment_font.height >> 6) * 1.2)
 
     last_y = y
     for paragraph in get_paragraphs(comment_body):
@@ -270,11 +269,11 @@ def comment_body_height(comment_body, width_box):
             if len(lines) == 1:
                 continue;
             x = start_x
-            y += line_spacing
+            y += spacing
             for _ in range(len(lines[1:]) - 1):
-                y += line_spacing
-            x += get_text_size_freetype(lines[-1], comment_font)[0] 
-        x, y = start_x, y + paragraph_spacing
+                y += spacing
+            x += get_text_size_freetype(lines[-1], comment_font)[0]
+        x, y = start_x, y + int(spacing * 1.2)
     return y
 
 def compute_comment_height(comment, width_box):
@@ -325,7 +324,7 @@ def wrap_text(text, width_box, font, pos):
 
 def draw_awards(img, pos, awards):
     (x, y) = pos
-    for award in awards:
+    for i, award in enumerate(awards):
         award_img = Image.open('./res/awards/' + award['id'] + '.png').convert("RGBA")
         award_dim = (48, 48)
         award_img = award_img.resize(award_dim)
@@ -335,6 +334,11 @@ def draw_awards(img, pos, awards):
             x += 5
             (x, y) = draw_string_to_image(str(award['count']), img, (x, y), header_font, GRAY)
         x += 10
+        if x > text_width_cutoff - 80:
+            x += 10
+            n_remaining = len(awards) - i - 1
+            (x, y) = draw_string_to_image(f"+ {n_remaining} more", img, (x, y), header_font, WHITE)
+            break;
     return (x, y)
 
 def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
@@ -440,7 +444,7 @@ def draw_string_to_image(string, img, pos, font, color):
 # only contains the text within a specified width -
 # text will continue to grow downward
 # so long as there are still sentences to write in the paragraph
-def write_sentence(text, img, pos, width_box, font, color):
+def write_sentence(text, img, pos, width_box, font, spacing, color):
     x, y = pos
     draw_debug_line_y(img, y, GREEN)
     start_x, end_x = width_box
@@ -455,13 +459,13 @@ def write_sentence(text, img, pos, width_box, font, color):
     (x, y) = draw_string_to_image(lines[0], img, (x, y), font, color)
     if len(lines) == 1:
         return (x + sentence_end_pad, y)
-    y += line_spacing
+    y += spacing
 
     last_y = y
     for n, line in enumerate(lines[1:]):
         (x, y) = draw_string_to_image(line, img, (start_x, y), font, color)
         last_y = y
-        y += line_spacing
+        y += spacing
 
     # debug
     (x, y) = (x + sentence_end_pad, last_y)
@@ -470,7 +474,7 @@ def write_sentence(text, img, pos, width_box, font, color):
 
 
 
-def write_paragraph(paragraph, img, pos, width_box, font, color):
+def write_paragraph(paragraph, img, pos, width_box, font, spacing, color):
     x, y  = pos
     start_x, end_x = width_box
 
@@ -480,7 +484,7 @@ def write_paragraph(paragraph, img, pos, width_box, font, color):
     frames = []
     LOG('START PARAGRAPH', '', (x, y))
     for sentence in get_sentences(paragraph):
-        (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, color)
+        (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, spacing, color)
         frames.append(np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :])
         # scroll pane
         if y - pane_y > screen_height:
@@ -490,7 +494,7 @@ def write_paragraph(paragraph, img, pos, width_box, font, color):
                 pane_y = y - text_start_y
 
     LOG('END PARAGRAPH', '')
-    (x, y) = start_x, y + paragraph_spacing
+    (x, y) = start_x, y + int(spacing * 1.2)
     draw_debug_line_y(img, y, RED)
     return frames, (x, y)
 
@@ -498,6 +502,7 @@ def write_paragraph(paragraph, img, pos, width_box, font, color):
 def write_comment(comment, img, pos):
     x, y = pos
     width_box = (x, text_width_cutoff)
+    spacing = int((comment_font.height >> 6) * 1.2)
     color = (255, 255, 255, 1)
     frames = []
 
@@ -516,7 +521,7 @@ def write_comment(comment, img, pos):
 
     LOG('START WRITE COMMENT', comment['body'])
     for paragraph in get_paragraphs(comment['body']):
-        paragraph_frames, (x, y) = write_paragraph(paragraph, img, (x, y), width_box, comment_font, color)
+        paragraph_frames, (x, y) = write_paragraph(paragraph, img, (x, y), width_box, comment_font, spacing, color)
         frames = frames + paragraph_frames
     LOG('END WRITE COMMENT', '', (x, y))
     return frames, (x, y)
@@ -683,10 +688,11 @@ def create_title_frame(post):
     img = Image.new("RGBA", (screen_width, screen_height), BACKGROUND)
     (x, y) = (text_start_x, int(screen_height / 3))
     width_box = (x, text_width_cutoff)
+    spacing = int((title_font.height >> 6) * 1.8)
     draw_title_header(img, (x, y), post['subreddit'], post['author'], 
                       post['created_utc'], post['awards'])
     draw_title_sidebar(img, (x, y), post['score'])
-    (x, y) = write_sentence(post['title'], img, (x, y), width_box, title_font, WHITE)
+    (x, y) = write_sentence(post['title'], img, (x, y), width_box, title_font, spacing, WHITE)
     draw_title_footer(img, (x, y), post['num_comments'])
     return np.array(img)
 
@@ -708,7 +714,7 @@ def create_title_video(post):
     cv2.destroyAllWindows()
 
     subprocess.run(f"ffmpeg -i {temp_dir}{na_title_video_name} -i {temp_dir}{title_audio_name} \
-            -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{title_card_file_name}", 
+            -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{title_card_file_name} > /dev/null 2>&1", 
             shell=True, timeout=300)
 
 
@@ -744,13 +750,13 @@ if __name__ == '__main__':
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
 
-
-    create_title_video(posts[0])
+    #create_title_video(posts[0])
     
     # uncomment for a long video that should take roughly 3:14 seconds to generate
     #posts[0]['comments'][0]['replies'] += posts[0]['comments'][1]['replies']
     #create_comment_chain_video(posts[0]['comments'][0])
 
+    #posts[0]['comments'] = posts[0]['comments'][:2]
     #create_final_video(posts[0])
 
 
