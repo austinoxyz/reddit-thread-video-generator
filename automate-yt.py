@@ -592,7 +592,7 @@ def create_comment_video(comment, img, start):
     global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
     subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} \
-                    -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{out_file_name} > /dev/null 2>&1", 
+                    -c copy -map 0:v:0 -map 1:a:0 -y ./{working_dir}{out_file_name} > /dev/null 2>&1", 
                    shell=True, timeout=300)
     LOG('VIDEO CREATED', out_file_name)
     comment_n += 1
@@ -624,7 +624,7 @@ def more_replies_than_desired(comment):
     #            return True
     return False
 
-# creates several subvideos and makes a call to ffmpeg to concatenate them
+# creates several subvideos and concatenates them with ffmpeg
 def create_comment_chain_video(comment):
     #if (more_replies_than_desired(comment)):
     #    raise MoreRepliesThanDesiredError("too many replies doofus.")
@@ -658,7 +658,7 @@ def create_comment_chain_video(comment):
     global chain_n
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-                    ./{working_dir}{out_file_name} > /dev/null 2>&1", 
+                    -y ./{working_dir}{out_file_name} > /dev/null 2>&1", 
                    shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
     chain_n += 1
@@ -700,7 +700,7 @@ def create_title_frame(post):
 def create_title_video(post):
     title_audio_name     = 'title.mp3'
     na_title_video_name  = 'na_title_card.mp4'
-    title_card_file_name = 'title_card.mp4'
+    out_file_name = 'title_card.mp4'
 
     frame = create_title_frame(post)
     duration = create_audio_file(post['title'], title_audio_name)
@@ -714,30 +714,43 @@ def create_title_video(post):
     cv2.destroyAllWindows()
 
     subprocess.run(f"ffmpeg -i {temp_dir}{na_title_video_name} -i {temp_dir}{title_audio_name} \
-            -c copy -map 0:v:0 -map 1:a:0 ./{working_dir}{title_card_file_name} > /dev/null 2>&1", 
+            -c copy -map 0:v:0 -map 1:a:0 -y ./{working_dir}{out_file_name} > /dev/null 2>&1", 
             shell=True, timeout=300)
+    return out_file_name
 
 
 # TODO partially implemented not working
 def create_final_video(post):
+
+    # create title card
+    title_card_file_name = create_title_video(post)
+
+    # create separate video for each top level comment and its replies
     global chain_n
     chain_n = 0
     file_names = []
-
     for comment in post['comments']:
-        LOG('TYPE OF COMMENT', 'type(comment))')
         chain_file_name = create_comment_chain_video(comment)
         file_names.append(chain_file_name)
 
+    # join together chain videos with 'static video' in between, with title-card first
     with open(file_names_txt_file, 'w') as f:
         f.write('file \'' + title_card_file_name + '\'\n')
-        for file_name in file_names:
+        for file_name in file_names[:-1]:
             f.write('file \'' + file_name + '\'\n')
-            f.write('file \'' + static_video_name + '\'\n')
+            f.write('file \'../res/' + static_video_name + '\'\n')
+        f.write('file \'' + file_names[-1] + '\'\n')
+
 
     LOG('CREATING FINAL VIDEO...', '')
-    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy {final_video_name}", 
+    subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
+                    -crf 20 -preset veryfast \
+                    -y {final_video_name}", 
                    shell=True, timeout=120)
+    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} \
+    #               -c:v libx264 -crf 20 -preset veryfast \
+    #               -y {final_video_name}", 
+    #               shell=True, timeout=120)
     LOG('FINAL VIDEO CREATED', '')
 
 if __name__ == '__main__':
@@ -746,17 +759,25 @@ if __name__ == '__main__':
     max_n_replies = 4
     with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
-
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
 
     #create_title_video(posts[0])
     
-    # uncomment for a long video that should take roughly 3:14 seconds to generate
+    # uncomment to test create_comment_chain_video with
+    # a long video that should take roughly 3:14 seconds to generate
+    #
     #posts[0]['comments'][0]['replies'] += posts[0]['comments'][1]['replies']
     #create_comment_chain_video(posts[0]['comments'][0])
 
-    #posts[0]['comments'] = posts[0]['comments'][:2]
-    #create_final_video(posts[0])
+    # uncomment to test create_final_video 
+    # with a short video with two comment chains
+    #
+    posts[0]['comments'] = posts[0]['comments'][:2]
+    posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
+    for comment in posts[0]['comments']:
+        for reply in comment['replies']:
+            reply['replies'] = []
+    create_final_video(posts[0])
 
 
