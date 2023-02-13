@@ -155,7 +155,7 @@ def sec_2_vid_duration(sec):
 
 
 def compute_comment_height(comment, width_box):
-    body_h = get_bounded_text_height(comment['body'], comment_font, width_box)
+    body_h = get_bounded_text_height(comment['body'], width_box, 'comment')
     return header_off + body_h + comment_end_pad - header_off
 
 
@@ -170,7 +170,7 @@ def total_comment_height(comment, width_box):
 
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
-    body_height = get_bounded_text_height(comment['body'], comment_font, width_box)
+    body_height = get_bounded_text_height(comment['body'], width_box, 'comment')
     height = body_height - downvote_img.height + comment_end_pad - header_off - 25
     if comment.get('replies') is None:
         return height
@@ -188,12 +188,12 @@ def draw_awards(img, pos, awards):
         x += award_dim[0]
         if award['count'] > 1:
             x += 5
-            (x, y) = draw_string_to_image(str(award['count']), img, (x, y), header_font, GRAY)
+            (x, y) = draw_string_to_image(str(award['count']), img, (x, y), GRAY, 'header')
         x += 10
         if x > text_width_cutoff - 80:
             x += 10
             n_remaining = len(awards) - i - 1
-            (x, y) = draw_string_to_image(f"+ {n_remaining} more", img, (x, y), header_font, WHITE)
+            (x, y) = draw_string_to_image(f"+ {n_remaining} more", img, (x, y), WHITE, 'header')
             break;
     return (x, y)
 
@@ -204,16 +204,16 @@ def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
 
     # write the username above the image
     username_color = (22, 210, 252, 1)
-    (x, y) = draw_string_to_image('u/' + username, img, (x, y), header_font, username_color)
+    (x, y) = draw_string_to_image('u/' + username, img, (x, y), username_color, 'header')
     x += 10
 
     if is_submitter:
-        (x, y) = draw_string_to_image('OP', img, (x, y), op_font, RED)
+        (x, y) = draw_string_to_image('OP', img, (x, y), RED, 'op')
         x += 10
 
     # write the points and time duration after the username 
     string = ' •   ' + points_str(npoints) + '   •   ' + time_ago_str(created_utc)
-    (x, y) = draw_string_to_image(string, img, (x, y), header_font, WHITE)
+    (x, y) = draw_string_to_image(string, img, (x, y), WHITE, 'header')
     x += 10
 
     # paste the medals
@@ -252,7 +252,7 @@ def write_comment(comment, img, pos):
     draw_debug_line_x(img, width_box[1], BLUE)
 
     draw_debug_line_y(img, y, YELLOW)
-    body_height_dbg = get_bounded_text_height(comment['body'], comment_font, width_box)
+    body_height_dbg = get_bounded_text_height(comment['body'], width_box, 'comment')
     draw_debug_line_y(img, y + body_height_dbg, YELLOW)
     total_height_dbg = total_comment_height(comment, width_box)
     if comment_n == 0:
@@ -263,7 +263,7 @@ def write_comment(comment, img, pos):
 
     LOG('START WRITE COMMENT', comment['body'])
     for paragraph in get_paragraphs(comment['body']):
-        paragraph_frames, (x, y) = write_paragraph(paragraph, img, (x, y), width_box, comment_font, spacing, color)
+        paragraph_frames, (x, y) = write_paragraph(paragraph, img, (x, y), width_box, spacing, color, 'comment')
         frames = frames + paragraph_frames
     LOG('END WRITE COMMENT', '', (x, y))
     return frames, (x, y)
@@ -410,11 +410,11 @@ def create_comment_chain_video(comment):
 def draw_title_header(img, pos, subreddit, username, created_utc, awards):
     (x, y) = pos[0] + 50, pos[1] - header_off
 
-    (x, y) = draw_string_to_image('r/' + subreddit, img, (x, y), sub_font, WHITE)
+    (x, y) = draw_string_to_image('r/' + subreddit, img, (x, y), WHITE, 'sub')
     x += 10
 
     string = ' •   Posted by u/' + username + '   •   ' + time_ago_str(created_utc)
-    (x, y) = draw_string_to_image(string, img, (x, y), title_header_font, GRAY)
+    (x, y) = draw_string_to_image(string, img, (x, y), GRAY, 'title_header')
     x += 10
 
     draw_awards(img, (x, y), awards)
@@ -434,7 +434,7 @@ def create_title_frame(post):
     draw_title_header(img, (x, y), post['subreddit'], post['author'], 
                       post['created_utc'], post['awards'])
     draw_title_sidebar(img, (x, y), post['score'])
-    (x, y) = write_sentence(post['title'], img, (x, y), width_box, title_font, spacing, WHITE)
+    (x, y) = write_sentence(post['title'], img, (x, y), width_box, spacing, WHITE, 'title')
     draw_title_footer(img, (x, y), post['num_comments'])
     return np.array(img)
 

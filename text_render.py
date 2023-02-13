@@ -20,6 +20,15 @@ text_height_cutoff = int(screen_height * 0.85)
 text_start_x  = screen_width - text_width_cutoff
 text_start_y  = screen_height - text_height_cutoff
 
+font_metric_string = ''.join([chr(c) for c in range(32, 256)])
+font_registry = {}
+
+def get_font(fontname):
+    return font_registry[fontname][0]
+
+def get_font_traits(fontname):
+    return font_registry[fontname][1:]
+
 def get_text_size_freetype(text, face):
     slot = face.glyph
     width, height, baseline = 0, 0, 0
@@ -34,17 +43,21 @@ def get_text_size_freetype(text, face):
         previous = c
     return width, height, baseline
 
-def get_bounded_text_height(text, font, width_box):
+def get_bounded_text_height(text, width_box, fontname):
     start_x, end_x = width_box
     x, y = start_x, 0
+
+    font = get_font(fontname)
+    height, baseline = get_font_traits(fontname)
     spacing = int((font.height >> 6) * 1.2)
+
 
     last_y = y
     for paragraph in get_paragraphs(text):
         for sentence in get_sentences(paragraph):
-            sent_width, sent_height, _ = get_text_size_freetype(sentence, font)
+            sent_width  = get_text_size_freetype(sentence, font)[0]
             if x + sent_width > int(end_x * 0.9):
-                lines = wrap_text(sentence, width_box, font, (x, y))
+                lines = wrap_text(sentence, width_box, (x, y), fontname)
             else:
                 lines = [sentence]
             first_line_width = get_text_size_freetype(lines[0], font)[0]
@@ -60,7 +73,7 @@ def get_bounded_text_height(text, font, width_box):
     return y
 
 
-def wrap_text(text, width_box, font, pos):
+def wrap_text(text, width_box, pos, fontname):
     wrapped_text = []
     line = ''
     words = text.split(' ')
@@ -68,6 +81,8 @@ def wrap_text(text, width_box, font, pos):
     begin = pos[0]
     start_x, end_x = width_box
     max_width = end_x - start_x
+
+    font = get_font(fontname)
 
     for word in words:
         text_width = get_text_size_freetype(line + ' ' + word, font)[0]
@@ -107,9 +122,10 @@ def draw_bitmap_to_image(bitmap, img, pos, color):
 
 
 # draws endlessly to the right with no logic otherwise
-def draw_string_to_image(string, img, pos, font, color):
+def draw_string_to_image(string, img, pos, color, fontname):
     x, y = pos
-    width, height, baseline = get_text_size_freetype(string, font)
+    height, baseline = get_font_traits(fontname)
+    font = get_font(fontname)
 
     slot = font.glyph
     previous = 0
@@ -135,26 +151,27 @@ def draw_string_to_image(string, img, pos, font, color):
 # only contains the text within a specified width -
 # text will continue to grow downward
 # so long as there are still sentences to write in the paragraph
-def write_sentence(text, img, pos, width_box, font, spacing, color):
+def write_sentence(text, img, pos, width_box, spacing, color, fontname):
     x, y = pos
     draw_debug_line_y(img, y, GREEN)
     start_x, end_x = width_box
+    font = get_font(fontname)
 
-    text_width, text_height, _ = get_text_size_freetype(text, font)
+    text_width = get_text_size_freetype(text, font)[0]
     if pos[0] + text_width > int(end_x * 0.9):
-        lines = wrap_text(text, width_box, font, pos)
+        lines = wrap_text(text, width_box, pos, fontname)
     else:
         lines = [text]
 
     LOG('DRAWING SENTENCE', text, pos)
-    (x, y) = draw_string_to_image(lines[0], img, (x, y), font, color)
+    (x, y) = draw_string_to_image(lines[0], img, (x, y), color, fontname)
     if len(lines) == 1:
         return (x + sentence_end_pad, y)
     y += spacing
 
     last_y = y
     for n, line in enumerate(lines[1:]):
-        (x, y) = draw_string_to_image(line, img, (start_x, y), font, color)
+        (x, y) = draw_string_to_image(line, img, (start_x, y), color, fontname)
         last_y = y
         y += spacing
 
@@ -165,9 +182,10 @@ def write_sentence(text, img, pos, width_box, font, spacing, color):
 
 
 
-def write_paragraph(paragraph, img, pos, width_box, font, spacing, color):
+def write_paragraph(paragraph, img, pos, width_box, spacing, color, fontname):
     x, y  = pos
     start_x, end_x = width_box
+    font = get_font(fontname)
 
     draw_debug_line_y(img, y, RED)
 
@@ -175,7 +193,7 @@ def write_paragraph(paragraph, img, pos, width_box, font, spacing, color):
     frames = []
     LOG('START PARAGRAPH', '', (x, y))
     for sentence in get_sentences(paragraph):
-        (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, spacing, color)
+        (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), spacing, color, fontname)
         frames.append(np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :])
         # scroll pane
         if y - pane_y > screen_height:
@@ -190,15 +208,11 @@ def write_paragraph(paragraph, img, pos, width_box, font, spacing, color):
     return frames, (x, y)
 
 
-font_metric_string = ''.join([chr(c) for c in range(32, 256)])
-
-font_registry = {}
-
-def add_font_to_registry(fpath, fontsize, name):
+def add_font_to_registry(fpath, fontsize, fontname):
     font = freetype.Face(fpath)
     font.set_char_size(fontsize * 64)
     height, baseline = get_text_size_freetype(font_metric_string, font)[1:]
-    font_registry[name] = {'height':height, 'baseline':baseline}
+    font_registry[fontname] = (font, height, baseline)
 
 def new_font(fpath, fontsize):
     font = freetype.Face(fpath)
