@@ -144,7 +144,7 @@ def save_top_posts_and_best_comments(subreddit_name):
     posts = subreddit.top(limit=10, time_filter='all')
     #posts = subreddit.top(limit=1, time_filter='all')
     posts_data = prune_posts(posts)
-    with codecs.open('posts.json', 'w', 'utf-8') as json_file:
+    with codecs.open('data/posts.json', 'w', 'utf-8') as json_file:
         json.dump(posts_data, json_file)
     save_awards_retrieved()
 

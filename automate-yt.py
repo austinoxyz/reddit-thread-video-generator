@@ -34,6 +34,11 @@ header_font = new_font('./fonts/Roboto-Regular.ttf', 24)
 op_font = new_font('./fonts/Roboto-Bold.ttf', 20)
 
 add_font_to_registry('./fonts/Roboto-Regular.ttf', 64, 'title')
+add_font_to_registry('./fonts/Roboto-Bold.ttf', 32, 'sub')
+add_font_to_registry('./fonts/Roboto-Regular.ttf', 28, 'title_header')
+add_font_to_registry('./fonts/Roboto-Regular.ttf', 32, 'comment')
+add_font_to_registry('./fonts/Roboto-Regular.ttf', 24, 'header')
+add_font_to_registry('./fonts/Roboto-Bold.ttf', 20, 'op')
 
 
 # Images
@@ -491,10 +496,9 @@ def create_final_video(post):
     LOG('FINAL VIDEO CREATED', '')
 
 if __name__ == '__main__':
-
     score_limit = 1000
     max_n_replies = 4
-    with codecs.open('posts.json', 'r', 'utf-8') as posts_file:
+    with codecs.open('data/posts.json', 'r', 'utf-8') as posts_file:
         posts = json.load(posts_file)
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)

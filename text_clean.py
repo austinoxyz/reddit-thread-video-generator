@@ -4,22 +4,6 @@ import re
 import codecs
 import json
 
-# good for testing a comment with a lot of Markdown
-test_text = "NTA\n\n\
-This is a recurring theme here on Reddit, people do not consider themselves thieves:\n\n\
-> Sammy and his daughters saw the lock and weren't happy, the girls were extremely upset. Sammy asked about it and I straight up told him. He said \"my daughters aren't thieves!!!\n\n\
-They seem to be under the wrongful impression that to be a thief you *have to* wear a mask and carry a crowbar. But theft is:\n\n\
-**Theft** is the taking of another person's property or services without that person's permission or consent with the intent to deprive the rightful owner of it. -- [Theft - Wikipedia](https://en.wikipedia.org/wiki/Theft)\n\n\
-This is literally what they have been doing. Taking stuff that wasn't theirs. And the rightful owner incurred a loss.\n\n\
-Sammy, who is your *guest*, sounds like an AH:\n\n\
-> he said Zoey could easily get another makeup kit for 15 bucks from walmart \n\n\
-While this is probably true, it is none of his business. And doesn't change a thing. If you steal from a store then the store owner could just get more stuff, but nobody (should) considers that to be an excuse.\n\n\
-> [he said Zoey] shouldn't even be buying expensive - adult makeup in the first place and suggested my wife take care of this \"defect\" in Zoey's personality trying to appear older than she is. \n\n\
-Instead of talking to his kids, he *blames the victim*. \"We took her stuff, because *she* shouldn't have said stuff. It would be better *my kids* had *her* stuff! Ugh!\n\n\
-> He accused me of being overprotective and babying Zoey with this level of enablement. \n\n\
-Not only does Sammy refuse to teach *his* kids not to take other people's things, he also considers *you* to be a bad parent. Even *if* you were incorrect in how you raise your kid, even *if* it would be better if your daughter shared her make-up, he is in *no position* to demand it, and his daughters, who are *guests in your house*, should follow reasonable \"house rules\".\n\n\
-Your wife is choosing her brother over her daughter (and you), and hasn't thought things through. What if they next go through *her* things? What if Sammy next goes through her underwear?!? Where does it end? Expecting people not to go through other people's stuff in perfectly reasonable. Sammy is an entitled ass.\n\n"
-
 acronym_map = {
     'OP': 'oh pee',
     'LOL': 'ell oh ell',
@@ -64,7 +48,7 @@ def replace_acronyms(text):
 
 curse_words = []
 def read_in_curse_words():
-    with codecs.open('curse_words.json', 'r', 'utf-8') as curse_file:
+    with codecs.open('data/curse_words.json', 'r', 'utf-8') as curse_file:
         curse_words = json.load(curse_file)
 read_in_curse_words()
 
@@ -129,7 +113,23 @@ def clean_comment_bodies(comment):
         for reply in comment:
             clean_comment_bodies(reply)
 
+
 if __name__ == '__main__':
+    # good for testing a comment with a lot of Markdown
+    test_text = "NTA\n\n\
+    This is a recurring theme here on Reddit, people do not consider themselves thieves:\n\n\
+    > Sammy and his daughters saw the lock and weren't happy, the girls were extremely upset. Sammy asked about it and I straight up told him. He said \"my daughters aren't thieves!!!\n\n\
+    They seem to be under the wrongful impression that to be a thief you *have to* wear a mask and carry a crowbar. But theft is:\n\n\
+    **Theft** is the taking of another person's property or services without that person's permission or consent with the intent to deprive the rightful owner of it. -- [Theft - Wikipedia](https://en.wikipedia.org/wiki/Theft)\n\n\
+    This is literally what they have been doing. Taking stuff that wasn't theirs. And the rightful owner incurred a loss.\n\n\
+    Sammy, who is your *guest*, sounds like an AH:\n\n\
+    > he said Zoey could easily get another makeup kit for 15 bucks from walmart \n\n\
+    While this is probably true, it is none of his business. And doesn't change a thing. If you steal from a store then the store owner could just get more stuff, but nobody (should) considers that to be an excuse.\n\n\
+    > [he said Zoey] shouldn't even be buying expensive - adult makeup in the first place and suggested my wife take care of this \"defect\" in Zoey's personality trying to appear older than she is. \n\n\
+    Instead of talking to his kids, he *blames the victim*. \"We took her stuff, because *she* shouldn't have said stuff. It would be better *my kids* had *her* stuff! Ugh!\n\n\
+    > He accused me of being overprotective and babying Zoey with this level of enablement. \n\n\
+    Not only does Sammy refuse to teach *his* kids not to take other people's things, he also considers *you* to be a bad parent. Even *if* you were incorrect in how you raise your kid, even *if* it would be better if your daughter shared her make-up, he is in *no position* to demand it, and his daughters, who are *guests in your house*, should follow reasonable \"house rules\".\n\n\
+    Your wife is choosing her brother over her daughter (and you), and hasn't thought things through. What if they next go through *her* things? What if Sammy next goes through her underwear?!? Where does it end? Expecting people not to go through other people's stuff in perfectly reasonable. Sammy is an entitled ass.\n\n"
     test_text = clean_comment_body(test_text)
     paras = get_paragraphs(test_text)
     sentences = get_sentences(paras[2])
