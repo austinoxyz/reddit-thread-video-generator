@@ -10,7 +10,7 @@ import codecs
 
 import numpy as np
 import freetype
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 from gtts import gTTS
 from pydub import AudioSegment
 import cv2
@@ -19,58 +19,21 @@ import subprocess
 from load_posts import save_top_posts_and_best_comments
 from text_clean import clean_comment_bodies, get_paragraphs, get_sentences, replace_acronyms
 
-# Colors
-RED    = (255,   0,   0, 1)
-GREEN  = (  0, 255,   0, 1)
-BLUE   = (  0,   0, 255, 1)
-CYAN   = (  0, 255, 255, 1)
-PINK   = (252,  17, 154, 1)
-YELLOW = (252, 248,  22, 1)
-ORANGE = (252, 127,  17, 1)
-MAROON = ( 68,   2,   2, 1)
-GRAY   = (153, 153, 153, 1)
-WHITE  = (255, 255, 255, 1)
-BLACK  = (  0,   0,   0, 1)
+from util import *
+from text_render import *
 
-BACKGROUND = (26, 26, 27, 0)
+
 
 
 # Fonts 
-title_font = freetype.Face('./fonts/Roboto-Regular.ttf')
-title_font_sz = 64
-title_font.set_char_size(title_font_sz * 64)
-title_font.load_char('A')
-title_font_height = title_font.height >> 6
+title_font = new_font('./fonts/Roboto-Regular.ttf', 64)
+sub_font = new_font('./fonts/Roboto-Bold.ttf', 32)
+title_header_font = new_font('./fonts/Roboto-Regular.ttf', 28)
+comment_font = new_font('./fonts/Roboto-Regular.ttf', 32)
+header_font = new_font('./fonts/Roboto-Regular.ttf', 24)
+op_font = new_font('./fonts/Roboto-Bold.ttf', 20)
 
-sub_font = freetype.Face('./fonts/Roboto-Bold.ttf')
-sub_font_sz = 32
-sub_font.set_char_size(sub_font_sz * 64)
-sub_font.load_char('A')
-sub_font_height = sub_font.height >> 6
-
-title_header_font = freetype.Face('./fonts/Roboto-Regular.ttf')
-title_header_font_sz = 28
-title_header_font.set_char_size(title_header_font_sz * 64)
-title_header_font.load_char('A')
-title_header_font_height = title_header_font.height >> 6
-
-comment_font = freetype.Face('./fonts/Roboto-Regular.ttf')
-comment_font_sz = 32
-comment_font.set_char_size(comment_font_sz * 64)
-comment_font.load_char('A')
-comment_font_height = comment_font.height >> 6
-
-header_font = freetype.Face('./fonts/Roboto-Regular.ttf')
-header_font_sz = 24
-header_font.set_char_size(header_font_sz * 64)
-header_font.load_char('A')
-header_font_height = header_font.height >> 6
-
-op_font = freetype.Face('./fonts/Roboto-Bold.ttf')
-op_font_sz = 20
-op_font.set_char_size(op_font_sz * 64)
-op_font.load_char('A')
-op_font_height = op_font.height >> 6
+add_font_to_registry('./fonts/Roboto-Regular.ttf', 64, 'title')
 
 
 # Images
@@ -87,19 +50,7 @@ footer_img_dim = (578, 48)
 footer_img = footer_img.resize(footer_img_dim)
 
 
-# Video dimensions and measurements
-screen_height, screen_width = 1080, 1920 
-aspect = float(screen_width / screen_height)
 fps = 30
-
-text_width_cutoff  = int(screen_width * 0.96)
-text_height_cutoff = int(screen_height * 0.85)
-text_start_x  = screen_width - text_width_cutoff
-text_start_y  = screen_height - text_height_cutoff
-
-magic_spacing_coefficient = 1.2
-
-sentence_end_pad = 25
 
 indent_off  = 50
 header_off  = 50
@@ -108,9 +59,9 @@ sidebar_off = 50, 50
 vote_img_pad = 100
 comment_end_pad = footer_img.height + 100
 
-pane_y = 0
 total_chain_height = 0
 img_height = 0
+
 
 
 # Project Structure
@@ -133,46 +84,8 @@ chain_video_name_base   = 'chain'
 comment_n = 0
 chain_n = 0
 
-def flatten(lst):
-    flattened_list = []
-    for item in lst:
-        if isinstance(item, list):
-            flattened_list.extend(flatten(item))
-        else:
-            flattened_list.append(item)
-    return flattened_list
 
 
-debug = False
-#debug = True
-
-def LOG(title, message, pos=''):
-    if len(title) > 32:
-        title = title[:32]
-    title = '[' + title + ']'
-    if len(message) > 48:
-        message = message[:48] + '...'
-    print('{:<32}'.format(title), end='')
-    print(' | {:<16}'.format(str(pos)), end='')
-    if message:
-        print(f' | {message}')
-        return
-    print(' | \n', end='')
-
-
-def draw_debug_line_y(img, y, color):
-    if not debug:
-        return
-    draw = ImageDraw.Draw(img)
-    dbg_ln_start, dbg_ln_end = (0, y), (screen_width, y)
-    draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
-
-def draw_debug_line_x(img, x, color):
-    if not debug:
-        return
-    draw = ImageDraw.Draw(img)
-    dbg_ln_start, dbg_ln_end = (x, 0), (x, screen_height)
-    draw.line([dbg_ln_start, dbg_ln_end], fill=color, width=2)
 
 
 def create_audio_file(text, file_name):
@@ -236,48 +149,8 @@ def sec_2_vid_duration(sec):
     return str(int(math.floor(int(sec) / 60))) + ':' + '{:0>2}'.format(str(int(sec) % 60))
 
 
-
-def get_text_size_freetype(text, face):
-    slot = face.glyph
-    width, height, baseline = 0, 0, 0
-    previous = 'a'
-    for i, c in enumerate(text):
-        face.load_char(c)
-        bitmap = slot.bitmap
-        height = max(height, bitmap.rows + max(0, -(slot.bitmap_top - bitmap.rows)))
-        baseline = max(baseline, max(0, -(slot.bitmap_top - bitmap.rows)))
-        kerning = face.get_kerning(previous, c)
-        width += (slot.advance.x >> 6) + (kerning.x >> 6)
-        previous = c
-    return width, height, baseline
-
-def comment_body_height(comment_body, width_box):
-    start_x, end_x = width_box
-    x, y = start_x, 0
-    spacing = int((comment_font.height >> 6) * 1.2)
-
-    last_y = y
-    for paragraph in get_paragraphs(comment_body):
-        for sentence in get_sentences(paragraph):
-            sent_width, sent_height, _ = get_text_size_freetype(sentence, comment_font)
-            if x + sent_width > int(end_x * 0.9):
-                lines = wrap_text(sentence, width_box, comment_font, (x, y))
-            else:
-                lines = [sentence]
-            first_line_width = get_text_size_freetype(lines[0], comment_font)[0]
-            x += first_line_width + sentence_end_pad
-            if len(lines) == 1:
-                continue;
-            x = start_x
-            y += spacing
-            for _ in range(len(lines[1:]) - 1):
-                y += spacing
-            x += get_text_size_freetype(lines[-1], comment_font)[0]
-        x, y = start_x, y + int(spacing * 1.2)
-    return y
-
 def compute_comment_height(comment, width_box):
-    body_h = comment_body_height(comment['body'], width_box)
+    body_h = get_bounded_text_height(comment['body'], comment_font, width_box)
     return header_off + body_h + comment_end_pad - header_off
 
 
@@ -292,35 +165,13 @@ def total_comment_height(comment, width_box):
 
 def compute_line_height(comment, width_box):
     start_x, end_x = width_box
-    body_height = comment_body_height(comment['body'], width_box)
+    body_height = get_bounded_text_height(comment['body'], comment_font, width_box)
     height = body_height - downvote_img.height + comment_end_pad - header_off - 25
     if comment.get('replies') is None:
         return height
     for reply in comment['replies']:
         height += total_comment_height(reply, (start_x + indent_off, end_x))
     return height
-
-def wrap_text(text, width_box, font, pos):
-    wrapped_text = []
-    line = ''
-    words = text.split(' ')
-
-    begin = pos[0]
-    start_x, end_x = width_box
-    max_width = end_x - start_x
-
-    for word in words:
-        text_width = get_text_size_freetype(line + ' ' + word, font)[0]
-        if begin + text_width < max_width:
-            line += ' ' + word
-        else:
-            if len(wrapped_text) == 0:
-                begin = start_x
-            wrapped_text.append(line)
-            line = word
-
-    wrapped_text.append(line)
-    return [line for line in wrapped_text if line != '']
 
 def draw_awards(img, pos, awards):
     (x, y) = pos
@@ -385,120 +236,6 @@ def draw_footer(img, pos):
 
 
 
-def get_subimage_at_y(img, y, WIDTH, sub_height):
-    image_np = np.array(image)
-    np.array(image)[pane_y:pane_y + screen_height, 0:screen_width, :]
-    sub_image = image_np[y:y + sub_height, 0:WIDTH, :]
-    return sub_image
-
-
-def draw_bitmap_to_image(bitmap, img, pos, color):
-    x, y = pos
-    x_max = x + bitmap.width
-    y_max = y + bitmap.rows
-
-    for p, i in enumerate(range(x, x_max)):
-        for q, j in enumerate(range(y, y_max)):
-            if i < 0 or j < 0 or i >= img.width or j >= img.height:
-                continue;
-
-            f = int(bitmap.buffer[q * bitmap.width + p]) # intensity
-            a = int(color[3] * 255)
-            r = int(f * color[0] * a / (255 * 255))
-            g = int(f * color[1] * a / (255 * 255))
-            b = int(f * color[2] * a / (255 * 255))
-
-            if f > 32:
-                pixel = img.getpixel((i, j))
-                new_pixel = pixel[0] | r, pixel[1] | g, pixel[2] | b, a
-                img.putpixel((i, j), new_pixel)
-
-
-
-# draws endlessly to the right with no logic otherwise
-def draw_string_to_image(string, img, pos, font, color):
-    x, y = pos
-    width, height, baseline = get_text_size_freetype(string, font)
-
-    slot = font.glyph
-    previous = 0
-    for c in string:
-        font.load_char(c)
-        bitmap = font.glyph.bitmap
-
-        c_img = Image.new("RGBA", (bitmap.width, bitmap.rows), 0)
-        draw_bitmap_to_image(bitmap, c_img, (0, 0), color)
-
-        draw_x = x + font.glyph.bitmap_left
-        draw_y = y + height - baseline - font.glyph.bitmap_top 
-        img.paste(c_img, (draw_x, draw_y), c_img)
-
-        advance = font.glyph.advance.x >> 6
-        kerning = font.get_kerning(previous, c).x >> 6
-        x += advance + kerning
-        previous = c
-    return (x, y)
-
-    
-
-# only contains the text within a specified width -
-# text will continue to grow downward
-# so long as there are still sentences to write in the paragraph
-def write_sentence(text, img, pos, width_box, font, spacing, color):
-    x, y = pos
-    draw_debug_line_y(img, y, GREEN)
-    start_x, end_x = width_box
-
-    text_width, text_height, _ = get_text_size_freetype(text, font)
-    if pos[0] + text_width > int(end_x * 0.9):
-        lines = wrap_text(text, width_box, font, pos)
-    else:
-        lines = [text]
-
-    LOG('DRAWING SENTENCE', text, pos)
-    (x, y) = draw_string_to_image(lines[0], img, (x, y), font, color)
-    if len(lines) == 1:
-        return (x + sentence_end_pad, y)
-    y += spacing
-
-    last_y = y
-    for n, line in enumerate(lines[1:]):
-        (x, y) = draw_string_to_image(line, img, (start_x, y), font, color)
-        last_y = y
-        y += spacing
-
-    # debug
-    (x, y) = (x + sentence_end_pad, last_y)
-    draw_debug_line_y(img, y, GREEN)
-    return (x, y)
-
-
-
-def write_paragraph(paragraph, img, pos, width_box, font, spacing, color):
-    x, y  = pos
-    start_x, end_x = width_box
-
-    draw_debug_line_y(img, y, RED)
-
-    global pane_y
-    frames = []
-    LOG('START PARAGRAPH', '', (x, y))
-    for sentence in get_sentences(paragraph):
-        (x, y) = write_sentence(sentence, img, (x, y), (start_x, end_x), font, spacing, color)
-        frames.append(np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :])
-        # scroll pane
-        if y - pane_y > screen_height:
-            if img_height - y < screen_height:
-                pane_y = img_height - screen_height
-            else:
-                pane_y = y - text_start_y
-
-    LOG('END PARAGRAPH', '')
-    (x, y) = start_x, y + int(spacing * 1.2)
-    draw_debug_line_y(img, y, RED)
-    return frames, (x, y)
-
-
 def write_comment(comment, img, pos):
     x, y = pos
     width_box = (x, text_width_cutoff)
@@ -510,7 +247,7 @@ def write_comment(comment, img, pos):
     draw_debug_line_x(img, width_box[1], BLUE)
 
     draw_debug_line_y(img, y, YELLOW)
-    body_height_dbg = comment_body_height(comment['body'], width_box)
+    body_height_dbg = get_bounded_text_height(comment['body'], comment_font, width_box)
     draw_debug_line_y(img, y + body_height_dbg, YELLOW)
     total_height_dbg = total_comment_height(comment, width_box)
     if comment_n == 0:
