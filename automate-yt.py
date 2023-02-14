@@ -24,21 +24,13 @@ from text_render import *
 
 
 
-
 # Fonts 
-title_font = new_font('./fonts/Roboto-Regular.ttf', 64)
-sub_font = new_font('./fonts/Roboto-Bold.ttf', 32)
-title_header_font = new_font('./fonts/Roboto-Regular.ttf', 28)
-comment_font = new_font('./fonts/Roboto-Regular.ttf', 32)
-header_font = new_font('./fonts/Roboto-Regular.ttf', 24)
-op_font = new_font('./fonts/Roboto-Bold.ttf', 20)
-
-add_font_to_registry('./fonts/Roboto-Regular.ttf', 64, 'title')
-add_font_to_registry('./fonts/Roboto-Bold.ttf', 32, 'sub')
-add_font_to_registry('./fonts/Roboto-Regular.ttf', 28, 'title_header')
-add_font_to_registry('./fonts/Roboto-Regular.ttf', 32, 'comment')
-add_font_to_registry('./fonts/Roboto-Regular.ttf', 24, 'header')
-add_font_to_registry('./fonts/Roboto-Bold.ttf', 20, 'op')
+register_font('./fonts/Roboto-Regular.ttf', 64, 'title')
+register_font('./fonts/Roboto-Bold.ttf',    32, 'sub')
+register_font('./fonts/Roboto-Regular.ttf', 28, 'title_header')
+register_font('./fonts/Roboto-Regular.ttf', 32, 'comment')
+register_font('./fonts/Roboto-Regular.ttf', 24, 'header')
+register_font('./fonts/Roboto-Bold.ttf',    20, 'op')
 
 
 # Images
@@ -53,6 +45,14 @@ downvote_img  = downvote_img.resize(downvote_dim)
 footer_img  = Image.open('./res/comment_footer.png').convert("RGBA")
 footer_img_dim = (578, 48)
 footer_img = footer_img.resize(footer_img_dim)
+
+title_footer_img  = Image.open('./res/title_footer.png').convert("RGBA")
+title_footer_img_dim = (420, 64)
+title_footer_img = title_footer_img.resize(title_footer_img_dim)
+
+comment_img  = Image.open('./res/comment.png').convert("RGBA")
+comment_img_dim = (64, 64)
+comment_img = comment_img.resize(comment_img_dim)
 
 
 fps = 30
@@ -87,9 +87,6 @@ comment_n = 0
 chain_n = 0
 
 
-
-
-
 def create_audio_file(text, file_name):
     path = os.path.join(temp_dir, file_name)
     text = replace_acronyms(text)
@@ -114,17 +111,19 @@ def create_comment_audio(comment_body):
     audio.export(os.path.join(temp_dir, audio_name))
     return durations
 
-def points_str(npoints):
+def prettify_num(n):
     multiplier = ''
-    if npoints >= 1000000:
-        first = npoints // 100000
-        second = ((npoints // 1000) % 1000) // 10
+    if n >= 1000000:
+        first = n // 100000
+        second = ((n // 1000) % 1000) // 100
         multiplier = 'm'
-    elif npoints >= 1000:
-        first = npoints // 1000
-        second = (npoints % 1000) // 10
+    elif n >= 1000:
+        first = n // 1000
+        second = (n % 1000) // 100
         multiplier = 'k'
-    return str(first) + '.' + str(second) + multiplier + ' points'
+    else:
+        return n
+    return str(first) + '.' + str(second) + multiplier
 
 def time_ago_str(created_utc):
     time_ago = int(time.time()) - int(created_utc)
@@ -211,7 +210,7 @@ def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
         x += 10
 
     # write the points and time duration after the username 
-    string = ' •   ' + points_str(npoints) + '   •   ' + time_ago_str(created_utc)
+    string = ' •   ' + prettify_num(npoints) + 'points   •   ' + time_ago_str(created_utc)
     (x, y) = draw_string_to_image(string, img, (x, y), WHITE, 'header')
     x += 10
 
@@ -243,7 +242,7 @@ def draw_footer(img, pos):
 def write_comment(comment, img, pos, pane_y):
     x, y = pos
     width_box = (x, text_width_cutoff)
-    spacing = int((comment_font.height >> 6) * 1.2)
+    spacing = int((get_font('comment').height >> 6)* 1.2)
     color = (255, 255, 255, 1)
     frames = []
 
@@ -419,17 +418,27 @@ def draw_title_sidebar(img, pos, score):
     return False
 
 def draw_title_footer(img, pos, num_comments):
-    return False
+    x, y = pos
+    img.paste(comment_img, (x, y), comment_img)
+    x += comment_img.width + 20
+    n_comments_str = str(prettify_num(num_comments))
+    (x, y) = draw_string_to_image(n_comments_str + ' Comments', img, (x, y + 15), FOOTER_GRAY, 'sub')
+    x += 20
+    y -= 15
+    img.paste(title_footer_img, (x, y), title_footer_img)
+    x += title_footer_img.width + 20
+    return (x, y)
 
 def create_title_frame(post):
     img = Image.new("RGBA", (screen_width, screen_height), BACKGROUND)
     (x, y) = (text_start_x, int(screen_height / 3))
     width_box = (x, text_width_cutoff)
-    spacing = int((title_font.height >> 6) * 1.8)
+    spacing = int((get_font('title').height >> 6) * 1.8)
     draw_title_header(img, (x, y), post['subreddit'], post['author'], 
                       post['created_utc'], post['awards'])
     draw_title_sidebar(img, (x, y), post['score'])
     (x, y) = write_sentence(post['title'], img, (x, y), width_box, spacing, WHITE, 'title')
+    (x, y) = (text_start_x, y + 100)
     draw_title_footer(img, (x, y), post['num_comments'])
     return np.array(img)
 
@@ -445,14 +454,17 @@ def create_title_video(post):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_title_video_name), fourcc, fps, (screen_width, screen_height))
     frame  = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+    print(f"type: {str(type(frame))}")
+    print(f"(width, height) = {str(frame.shape)}")
+    print(f"dtype = {str(frame.dtype)}")
     for _ in range(int(fps * duration)):
         out.write(frame)
     out.release()
     cv2.destroyAllWindows()
-
     subprocess.run(f"ffmpeg -i {temp_dir}{na_title_video_name} -i {temp_dir}{title_audio_name} \
             -c copy -map 0:v:0 -map 1:a:0 -y ./{working_dir}{out_file_name} > /dev/null 2>&1", 
             shell=True, timeout=300)
+    LOG('VIDEO CREATED', out_file_name)
     return out_file_name
 
 
@@ -481,9 +493,12 @@ def create_final_video(post):
 
     LOG('CREATING FINAL VIDEO...', '')
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-                    -crf 20 -preset veryfast \
                     -y {final_video_name}", 
                    shell=True, timeout=120)
+    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
+    #                -crf 20 -preset veryfast \
+    #                -y {final_video_name}", 
+    #               shell=True, timeout=120)
     #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} \
     #               -c:v libx264 -crf 20 -preset veryfast \
     #               -y {final_video_name}", 
@@ -498,7 +513,7 @@ if __name__ == '__main__':
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
 
-    #create_title_video(posts[0])
+    create_title_video(posts[0])
     
     # uncomment to test create_comment_chain_video with
     # a long video that should take roughly 3:14 seconds to generate
@@ -509,11 +524,11 @@ if __name__ == '__main__':
     # uncomment to test create_final_video 
     # with a short video with two comment chains
     #
-    posts[0]['comments'] = posts[0]['comments'][:2]
-    posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
-    for comment in posts[0]['comments']:
-        for reply in comment['replies']:
-            reply['replies'] = []
-    create_final_video(posts[0])
+    #posts[0]['comments'] = posts[0]['comments'][:2]
+    #posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
+    #for comment in posts[0]['comments']:
+    #    for reply in comment['replies']:
+    #        reply['replies'] = []
+    #create_final_video(posts[0])
 
 

@@ -49,9 +49,9 @@ def get_bounded_text_height(text, width_box, fontname):
     last_y = y
     for paragraph in get_paragraphs(text):
         for sentence in get_sentences(paragraph):
-            sent_width  = get_text_size_freetype(sentence, font)[0]
             if x > int(end_x * 0.9):
                 (x, y) = (start_x, y + spacing)
+            sent_width  = get_text_size_freetype(sentence, font)[0]
             if x + sent_width > int(end_x * 0.9):
                 lines = wrap_text(sentence, width_box, (x, y), fontname)
             else:
@@ -207,7 +207,7 @@ def write_paragraph(paragraph, img, pos, pane_y, width_box, spacing, color, font
     return frames, (x, y), pane_y
 
 
-def add_font_to_registry(fpath, fontsize, fontname):
+def register_font(fpath, fontsize, fontname):
     font = freetype.Face(fpath)
     font.set_char_size(fontsize * 64)
     height, baseline = get_text_size_freetype(font_metric_string, font)[1:]

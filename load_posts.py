@@ -17,12 +17,12 @@ awards_dir = 'res/awards/'
 awards_retrieved_fname = awards_dir + 'retrieved.txt'
 awards_retrieved = []
 
-def save_awards_retrieved():
+def save_award_icons_retrieved():
     with open(awards_retrieved_fname, 'w') as retrieved_f:
         for award_id in awards_retrieved:
             retrieved_f.write(award_id + '\n')
 
-def load_awards_retrieved():
+def load_award_icons_retrieved():
     with open(awards_retrieved_fname, 'r') as retrieved_f:
         awards_retrieved = [line.strip() for line in retrieved_f.readlines()]
 
@@ -30,6 +30,24 @@ def retrieve_award_icon(award_id, url):
     response = requests.get(url)
     with open(awards_dir + award_id + '.png', 'wb') as award_icon_f:
         award_icon_f.write(response.content)
+
+community_icons_dir = 'res/community_icons/'
+community_icons_retrieved_fname = community_icons_dir + 'retrieved.txt'
+community_icons_retrieved = []
+
+def save_community_icons_retrieved():
+    with open(community_icons_retrieved_fname, 'w') as retrieved_f:
+        for sub_id in community_icons_retrieved:
+            retrieved_f.write(sub_id + '\n')
+
+def load_community_icons_retrieved():
+    with open(community_icons_retrieved_fname, 'r') as retrieved_f:
+        community_icons_retrieved = [line.strip() for line in retrieved_f.readlines()]
+
+def retrieve_community_icon(sub_id, url):
+    response = requests.get(url)
+    with open(community_icons_dir + sub_id + '.png', 'wb') as icon_f:
+        icon_f.write(response.content)
 
 def move_elements_to_front(lst, order):
     moved = []
@@ -60,7 +78,10 @@ def get_awards(comment):
 def prune_posts(posts):
     top_posts = []
     for post in posts:
-        print(f"Pruning post titled:  {post.title[:20]}...")
+        if len(post.title) > 64:
+            print(f"Pruning post titled:  {post.title[:64]}...")
+        else:
+            print(f"Pruning post titled:  {post.title}")
         post.comments.replace_more(limit=0)
         top_posts.append({
             'title': post.title,
@@ -76,6 +97,7 @@ def prune_posts(posts):
             'awards': get_awards(post),
             'selftext': post.selftext,
             'num_comments': post.num_comments,
+            'id': post.id,
 
             # will call similar function on each reply in forest
             'comments': prune_comments(post.comments)
@@ -135,19 +157,54 @@ def prune_replies(replies):
             break;
     return top_replies
 
-def save_top_posts_and_best_comments(subreddit_name):
-    load_awards_retrieved()
+def print_all_attrs(obj):
+    for attr in dir(obj):
+        print(str(attr))
+    print('\n')
+
+def dump_attrs(subreddit_name):
     reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
                          client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
                          user_agent=   'python-script')
+
     subreddit = reddit.subreddit(subreddit_name)
+    print(f'Subreddit: (id={subreddit.id})')
+    print_all_attrs(subreddit)
+
+    print(subreddit.community_icon)
+
+    submission = reddit.submission(id='ocx94s')
+    print('Submission: ')
+    print_all_attrs(submission)
+
+    submission.comments.replace_more(limit=0)
+    comments = [comment for comment in submission.comments]
+    print('Comment: ')
+    print_all_attrs(comments[0])
+
+
+def save_top_posts_and_best_comments(subreddit_name):
+    load_award_icons_retrieved()
+    load_community_icons_retrieved()
+
+    reddit = praw.Reddit(client_id=    'Sx5GE4fYzUuNLwEg_h8k4w',
+                         client_secret='0n4qkZVolBDeR2v5qq6-BnSuJyhQ7w',
+                         user_agent=   'python-script')
+
+    subreddit = reddit.subreddit(subreddit_name)
+    if subreddit.id not in community_icons_retrieved:
+        retrieve_community_icon(subreddit.id, subreddit.community_icon)
+
     posts = subreddit.top(limit=10, time_filter='all')
     #posts = subreddit.top(limit=1, time_filter='all')
     posts_data = prune_posts(posts)
     with codecs.open('data/posts.json', 'w', 'utf-8') as json_file:
         json.dump(posts_data, json_file)
-    save_awards_retrieved()
+
+    save_award_icons_retrieved()
+    save_community_icons_retrieved()
 
 if __name__ == '__main__':
     save_top_posts_and_best_comments('AmItheAsshole')
+    #dump_attrs('AmItheAsshole')
 

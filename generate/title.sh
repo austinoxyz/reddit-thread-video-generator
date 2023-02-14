@@ -1,5 +1,6 @@
 #!/bin/sh
 clear
+rm -rf ./__pycache__
 rm -rf ./build-vid
 mkdir -p ./build-vid/tmp
 python3 automate-yt.py
