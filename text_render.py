@@ -46,11 +46,12 @@ def get_bounded_text_height(text, width_box, fontname):
     font = get_font(fontname)
     spacing = int((font.height >> 6) * 1.2)
 
-
     last_y = y
     for paragraph in get_paragraphs(text):
         for sentence in get_sentences(paragraph):
             sent_width  = get_text_size_freetype(sentence, font)[0]
+            if x > int(end_x * 0.9):
+                (x, y) = (start_x, y + spacing)
             if x + sent_width > int(end_x * 0.9):
                 lines = wrap_text(sentence, width_box, (x, y), fontname)
             else:
@@ -91,7 +92,6 @@ def wrap_text(text, width_box, pos, fontname):
 
     wrapped_text.append(line)
     wrapped_text = [line for line in wrapped_text if line != '']
-    LOG('WRAPPED TEXT', str(wrapped_text))
     return wrapped_text
 
 

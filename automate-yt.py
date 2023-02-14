@@ -46,7 +46,7 @@ upvote_img = Image.open('./res/upvote.png').convert("RGBA")
 upvote_dim = (38, 38)
 upvote_img = upvote_img.resize(upvote_dim)
 
-downvote_img  = Image.open('./res/downvote.png').convert("RGBA")
+downvote_img = Image.open('./res/downvote.png').convert("RGBA")
 downvote_dim = (38, 38)
 downvote_img  = downvote_img.resize(downvote_dim)
 
