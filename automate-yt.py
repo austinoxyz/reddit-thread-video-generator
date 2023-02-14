@@ -54,12 +54,21 @@ comment_img  = Image.open('./res/comment.png').convert("RGBA")
 comment_img_dim = (64, 64)
 comment_img = comment_img.resize(comment_img_dim)
 
+title_upvote_img = Image.open('./res/upvote.png').convert("RGBA")
+title_upvote_dim = (75, 75)
+title_upvote_img = title_upvote_img.resize(title_upvote_dim)
+
+title_downvote_img = Image.open('./res/downvote.png').convert("RGBA")
+title_downvote_dim = (75, 75)
+title_downvote_img = title_downvote_img.resize(title_downvote_dim)
 
 fps = 30
 
 indent_off  = 50
 header_off  = 50
 sidebar_off = 50, 50
+
+title_sidebar_off = 80, 80
 
 vote_img_pad = 100
 comment_end_pad = footer_img.height + 100
@@ -85,7 +94,6 @@ chain_video_name_base   = 'chain'
 
 comment_n = 0
 chain_n = 0
-
 
 def create_audio_file(text, file_name):
     path = os.path.join(temp_dir, file_name)
@@ -186,7 +194,7 @@ def draw_awards(img, pos, awards):
             (x, y) = (x + 5, y)
             (x, y) = draw_string_to_image(str(award['count']), img, (x, y), GRAY, 'header')
         (x, y) = (x + 10, y)
-        if x > text_width_cutoff - 80:
+        if x > int(text_width_cutoff * 0.85):
             if i == len(awards) - 1:
                 return (x, y)
             (x, y) = (x + 10, y)
@@ -194,6 +202,8 @@ def draw_awards(img, pos, awards):
             (x, y) = draw_string_to_image(f"+ {n_remaining} more", img, (x, y), WHITE, 'header')
             return (x, y)
     return (x, y)
+
+
 
 def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
     (x, y) = pos[0], pos[1] - header_off
@@ -401,20 +411,66 @@ def create_comment_chain_video(comment):
 
     return out_file_name
 
-def draw_title_header(img, pos, subreddit, username, created_utc, awards):
-    (x, y) = pos[0] + 50, pos[1] - header_off
+def draw_circular_border_around_img(img, border_color):
+    data = np.array(img)
+    center = (img.width // 2, img.height // 2)
+    radius = center[0]
+    for x in range(img.width):
+        for y in range(img.height):
+            if math.sqrt((center[0] - x)**2 + (center[1] - y)**2) > radius:
+                data[y, x] = border_color
+    return Image.fromarray(data, mode='RGBA')
 
-    (x, y) = draw_string_to_image('r/' + subreddit, img, (x, y), WHITE, 'sub')
+def draw_title_awards(img, pos, awards, width_box):
+    (x, y) = pos
+    spacing = int((get_font('title_header').height >> 6) * 1.5)
+    for i, award in enumerate(awards):
+        award_img = Image.open('./res/awards/' + award['id'] + '.png').convert("RGBA")
+        award_dim = (48, 48)
+        award_img = award_img.resize(award_dim)
+        img.paste(award_img, (x, y - int(award_dim[1] / 3)), award_img)
+        x += award_dim[0]
+        if award['count'] > 1:
+            (x, y) = (x + 5, y)
+            (x, y) = draw_string_to_image(str(award['count']), img, (x, y), GRAY, 'title_header')
+        (x, y) = (x + 10, y)
+        if x > width_box[1]:
+            (x, y) = (width_box[0], y + spacing)
+    return (x, y + spacing)
+
+
+def draw_title_header(img, pos, sub_name, sub_id, username, created_utc, awards):
+    (x, y) = pos[0], pos[1] - header_off
+
+    community_icon_img = Image.open(f'./res/community_icons/{sub_id}.png').convert("RGBA")
+    community_icon_img = community_icon_img.resize((250, 250))
+    community_icon_img = draw_circular_border_around_img(community_icon_img, BACKGROUND)
+    community_icon_img = community_icon_img.resize((80, 80))
+    img.paste(community_icon_img, (x, y), community_icon_img)
+    x += community_icon_img.width + 20
+
+    (x, y) = draw_string_to_image('r/' + sub_name, img, (x, y), WHITE, 'sub')
     x += 10
 
     string = ' •   Posted by u/' + username + '   •   ' + time_ago_str(created_utc)
-    (x, y) = draw_string_to_image(string, img, (x, y), GRAY, 'title_header')
-    x += 10
+    (x, y) = draw_string_to_image(string, img, (x, y + 5), GRAY, 'title_header')
+    x += 30
+    y -= 5
 
-    draw_awards(img, (x, y), awards)
-    return False
+    width_box = (title_start_x + community_icon_img.width + 20, int(text_width_cutoff * 0.85))
+    (x, y) = draw_title_awards(img, (x, y + 10), awards, width_box)
+    return (x, y)
 
 def draw_title_sidebar(img, pos, score):
+    (x, y) = (pos[0] - title_sidebar_off[0], pos[1] - title_sidebar_off[1])
+    img.paste(title_upvote_img, (x, y), title_upvote_img)
+    y += title_upvote_img.height + 10
+    score_str = prettify_num(score)
+    score_width = get_text_size_freetype(score_str, get_font('op'))[0]
+    draw_x = pos[0] - title_sidebar_off[0] + ((title_upvote_img.width - score_width) // 2)
+    draw_string_to_image(score_str, img, (draw_x, y), WHITE, 'op')
+    y += 30
+    img.paste(title_downvote_img, (x, y), title_downvote_img)
     return False
 
 def draw_title_footer(img, pos, num_comments):
@@ -431,11 +487,12 @@ def draw_title_footer(img, pos, num_comments):
 
 def create_title_frame(post):
     img = Image.new("RGBA", (screen_width, screen_height), BACKGROUND)
-    (x, y) = (text_start_x, int(screen_height / 3))
+    (x, y) = (title_start_x, int(screen_height / 3))
     width_box = (x, text_width_cutoff)
     spacing = int((get_font('title').height >> 6) * 1.8)
-    draw_title_header(img, (x, y), post['subreddit'], post['author'], 
+    (_, y) = draw_title_header(img, (x, y), post['sub_name'], post['sub_id'], post['author'], 
                       post['created_utc'], post['awards'])
+    y -= 15
     draw_title_sidebar(img, (x, y), post['score'])
     (x, y) = write_sentence(post['title'], img, (x, y), width_box, spacing, WHITE, 'title')
     (x, y) = (text_start_x, y + 100)
@@ -454,9 +511,6 @@ def create_title_video(post):
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     out    = cv2.VideoWriter(os.path.join(temp_dir, na_title_video_name), fourcc, fps, (screen_width, screen_height))
     frame  = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-    print(f"type: {str(type(frame))}")
-    print(f"(width, height) = {str(frame.shape)}")
-    print(f"dtype = {str(frame.dtype)}")
     for _ in range(int(fps * duration)):
         out.write(frame)
     out.release()

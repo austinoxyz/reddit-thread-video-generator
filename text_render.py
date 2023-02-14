@@ -16,6 +16,9 @@ text_height_cutoff = int(screen_height * 0.85)
 text_start_x  = screen_width - text_width_cutoff
 text_start_y  = screen_height - text_height_cutoff
 
+title_start_x = text_start_x + 50
+
+
 font_metric_string = ''.join([chr(c) for c in range(32, 256)])
 font_registry = {}
 
