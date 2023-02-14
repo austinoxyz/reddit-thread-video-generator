@@ -7,10 +7,6 @@ import numpy as np
 from text_clean import clean_comment_bodies, get_paragraphs, get_sentences
 from util import *
 
-# TODO find a better place for this or 
-# refactor it out of global scope
-pane_y = 0
-
 screen_height, screen_width = 1080, 1920 
 aspect = float(screen_width / screen_height)
 
@@ -48,7 +44,6 @@ def get_bounded_text_height(text, width_box, fontname):
     x, y = start_x, 0
 
     font = get_font(fontname)
-    height, baseline = get_font_traits(fontname)
     spacing = int((font.height >> 6) * 1.2)
 
 
@@ -152,6 +147,7 @@ def draw_string_to_image(string, img, pos, color, fontname):
 # text will continue to grow downward
 # so long as there are still sentences to write in the paragraph
 def write_sentence(text, img, pos, width_box, spacing, color, fontname):
+    LOG('DRAWING SENTENCE', text, pos)
     x, y = pos
     draw_debug_line_y(img, y, GREEN)
     start_x, end_x = width_box
@@ -163,7 +159,6 @@ def write_sentence(text, img, pos, width_box, spacing, color, fontname):
     else:
         lines = [text]
 
-    LOG('DRAWING SENTENCE', text, pos)
     (x, y) = draw_string_to_image(lines[0], img, (x, y), color, fontname)
     if len(lines) == 1:
         return (x + sentence_end_pad, y)
@@ -182,14 +177,13 @@ def write_sentence(text, img, pos, width_box, spacing, color, fontname):
 
 
 
-def write_paragraph(paragraph, img, pos, width_box, spacing, color, fontname):
+def write_paragraph(paragraph, img, pos, pane_y, width_box, spacing, color, fontname):
     x, y  = pos
     start_x, end_x = width_box
     font = get_font(fontname)
 
     draw_debug_line_y(img, y, RED)
 
-    global pane_y
     frames = []
     LOG('START PARAGRAPH', '', (x, y))
     for sentence in get_sentences(paragraph):
@@ -197,15 +191,15 @@ def write_paragraph(paragraph, img, pos, width_box, spacing, color, fontname):
         frames.append(np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :])
         # scroll pane
         if y - pane_y > screen_height:
-            if img_height - y < screen_height:
-                pane_y = img_height - screen_height
+            if img.height - y < screen_height:
+                pane_y = img.height - screen_height
             else:
                 pane_y = y - text_start_y
 
     LOG('END PARAGRAPH', '')
     (x, y) = start_x, y + int(spacing * 1.2)
     draw_debug_line_y(img, y, RED)
-    return frames, (x, y)
+    return frames, (x, y), pane_y
 
 
 def add_font_to_registry(fpath, fontsize, fontname):

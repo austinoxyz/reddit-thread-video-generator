@@ -64,9 +64,6 @@ sidebar_off = 50, 50
 vote_img_pad = 100
 comment_end_pad = footer_img.height + 100
 
-total_chain_height = 0
-img_height = 0
-
 
 
 # Project Structure
@@ -187,14 +184,16 @@ def draw_awards(img, pos, awards):
         img.paste(award_img, (x, y - int(award_dim[1] / 3)), award_img)
         x += award_dim[0]
         if award['count'] > 1:
-            x += 5
+            (x, y) = (x + 5, y)
             (x, y) = draw_string_to_image(str(award['count']), img, (x, y), GRAY, 'header')
-        x += 10
+        (x, y) = (x + 10, y)
         if x > text_width_cutoff - 80:
-            x += 10
+            if i == len(awards) - 1:
+                return (x, y)
+            (x, y) = (x + 10, y)
             n_remaining = len(awards) - i - 1
             (x, y) = draw_string_to_image(f"+ {n_remaining} more", img, (x, y), WHITE, 'header')
-            break;
+            return (x, y)
     return (x, y)
 
 def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
@@ -241,7 +240,7 @@ def draw_footer(img, pos):
 
 
 
-def write_comment(comment, img, pos):
+def write_comment(comment, img, pos, pane_y):
     x, y = pos
     width_box = (x, text_width_cutoff)
     spacing = int((comment_font.height >> 6) * 1.2)
@@ -263,16 +262,16 @@ def write_comment(comment, img, pos):
 
     LOG('START WRITE COMMENT', comment['body'])
     for paragraph in get_paragraphs(comment['body']):
-        paragraph_frames, (x, y) = write_paragraph(paragraph, img, (x, y), width_box, spacing, color, 'comment')
+        paragraph_frames, (x, y), pane_y = write_paragraph(paragraph, img, (x, y), pane_y, width_box, spacing, color, 'comment')
         frames = frames + paragraph_frames
     LOG('END WRITE COMMENT', '', (x, y))
-    return frames, (x, y)
+    return frames, (x, y), pane_y
 
 
 
 
-def create_comment_frames(comment, img, start):
-    x, y = start
+def create_comment_frames(comment, img, pos, pane_y):
+    x, y = pos
 
     # draw sidebar
     line_height = compute_line_height(comment, (x, text_width_cutoff))
@@ -282,7 +281,7 @@ def create_comment_frames(comment, img, start):
     draw_header(img, (x, y), comment['author'], comment['score'], comment['created_utc'], comment['is_submitter'], comment['awards'])
 
     # write comment and create new frame for each sentence
-    frames, (x, y) = write_comment(comment, img, (x, y))
+    frames, (x, y), pane_y = write_comment(comment, img, (x, y), pane_y)
 
     # draw comment footer to last frame
     (x, y) = draw_footer(img, (x, y))
@@ -293,7 +292,7 @@ def create_comment_frames(comment, img, start):
 
     #frames[-1] = np.array(img)
     frames[-1] = np.array(img)[pane_y:pane_y + screen_height, 0:screen_width, :]
-    return frames, (x, y)
+    return frames, (x, y), pane_y
 
 
 # creates audio for each sentence of the comment body with gTTs and combines
@@ -305,21 +304,20 @@ def create_comment_frames(comment, img, start):
 # combines the audioless video and the audio with ffmpeg for a video of just this comment
 # 
 # returns the img given, in case this comment is part of a tree
-def create_comment_video(comment, img, start):
-    x, y = start
+def create_comment_video(comment, img, pos, pane_y):
+    x, y = pos
     # scroll pane
-    global pane_y
     comment_height = compute_comment_height(comment, (x, text_width_cutoff))
     if y + comment_height > pane_y + screen_height:
         old_pane_y = pane_y
-        if img_height - y < screen_height:
-            pane_y = img_height - screen_height
+        if img.height - y < screen_height:
+            pane_y = img.height - screen_height
         else:
             pane_y = y - text_start_y
         LOG('PANE SHIFT', '', (old_pane_y, pane_y))
 
-    durations      = create_comment_audio(comment['body'])
-    frames, (x, y) = create_comment_frames(comment, img, (x, y))
+    durations = create_comment_audio(comment['body'])
+    frames, (x, y), pane_y = create_comment_frames(comment, img, (x, y), pane_y)
 
     LOG('WRITING VIDEO', sec_2_vid_duration(sum(durations)))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -342,9 +340,9 @@ def create_comment_video(comment, img, start):
     out_file_names = [out_file_name]
     if 'replies' in comment:
         for reply in comment['replies']:
-            (_, y), reply_out_file_names = create_comment_video(reply, img, (x + indent_off, y))
+            (_, y), pane_y, reply_out_file_names = create_comment_video(reply, img, (x + indent_off, y), pane_y)
             out_file_names.append(flatten(reply_out_file_names))
-    return (x, y), flatten(out_file_names)
+    return (x, y), pane_y, flatten(out_file_names)
 
 
 class MoreRepliesThanDesiredError(Exception):
@@ -372,7 +370,6 @@ def create_comment_chain_video(comment):
     #    raise MoreRepliesThanDesiredError("too many replies doofus.")
 
     # scroll pane
-    global pane_y, total_chain_height, img_height
     pane_y = 0
     img_height = screen_height
     total_chain_height = total_comment_height(comment, (text_start_x, text_width_cutoff))
@@ -383,15 +380,13 @@ def create_comment_chain_video(comment):
         img_height = total_chain_height + (2 * text_start_y)
 
     LOG('START Y', str(start_y))
-    LOG('TOTAL CHAIN HEIGHT', str(total_chain_height))
     LOG('IMAGE HEIGHT', str(img_height))
 
     global comment_n
     comment_n = 0
     (x, y) = (text_start_x, start_y)
     img = Image.new("RGBA", (screen_width, img_height), BACKGROUND)
-
-    end, file_names = create_comment_video(comment, img, (x, y))
+    end, pane_y, file_names = create_comment_video(comment, img, (x, y), pane_y)
 
     with open(file_names_txt_file, 'w') as f:
         for file_name in file_names:
