@@ -90,7 +90,9 @@ def wrap_text(text, width_box, pos, fontname):
             line = word
 
     wrapped_text.append(line)
-    return [line for line in wrapped_text if line != '']
+    wrapped_text = [line for line in wrapped_text if line != '']
+    LOG('WRAPPED TEXT', str(wrapped_text))
+    return wrapped_text
 
 
 def draw_bitmap_to_image(bitmap, img, pos, color):
@@ -153,9 +155,12 @@ def write_sentence(text, img, pos, width_box, spacing, color, fontname):
     start_x, end_x = width_box
     font = get_font(fontname)
 
+    if x > int(end_x * 0.9):
+        (x, y) = (start_x, y + spacing)
+
     text_width = get_text_size_freetype(text, font)[0]
-    if pos[0] + text_width > int(end_x * 0.9):
-        lines = wrap_text(text, width_box, pos, fontname)
+    if x + text_width > int(end_x * 0.9):
+        lines = wrap_text(text, width_box, (x, y), fontname)
     else:
         lines = [text]
 
