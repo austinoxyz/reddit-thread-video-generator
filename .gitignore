@@ -3,6 +3,7 @@ build-vid/
 res/
 test/
 __pycache__/
+better_profanity/
 
 posts.json
 posts.pretty.json

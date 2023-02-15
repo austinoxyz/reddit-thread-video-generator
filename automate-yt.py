@@ -17,7 +17,7 @@ import cv2
 import subprocess
 
 from load_posts import save_top_posts_and_best_comments
-from text_clean import clean_comment_bodies, get_paragraphs, get_sentences, replace_acronyms
+from text_clean import clean_comment_bodies, get_paragraphs, get_sentences, replace_acronyms, censor_curse_words
 
 from util import *
 from text_render import *
@@ -257,12 +257,13 @@ def write_comment(comment, img, pos, pane_y):
     spacing = int((get_font('comment').height >> 6)* 1.2)
     color = (255, 255, 255, 1)
     frames = []
+    text = censor_curse_words(comment['body'])
 
     draw_debug_line_x(img, width_box[0], BLUE)
     draw_debug_line_x(img, width_box[1], BLUE)
 
     draw_debug_line_y(img, y, YELLOW)
-    body_height_dbg = get_bounded_text_height(comment['body'], width_box, 'comment')
+    body_height_dbg = get_bounded_text_height(text, width_box, 'comment')
     draw_debug_line_y(img, y + body_height_dbg, YELLOW)
     total_height_dbg = total_comment_height(comment, width_box)
     if comment_n == 0:
@@ -271,8 +272,8 @@ def write_comment(comment, img, pos, pane_y):
         draw_debug_line_y(img, y + total_height_dbg, RED)
 
 
-    LOG('START WRITE COMMENT', comment['body'])
-    for paragraph in get_paragraphs(comment['body']):
+    LOG('START WRITE COMMENT', text)
+    for paragraph in get_paragraphs(text):
         paragraph_frames, (x, y), pane_y = write_paragraph(paragraph, img, (x, y), pane_y, width_box, spacing, color, 'comment')
         frames = frames + paragraph_frames
     LOG('END WRITE COMMENT', '', (x, y))
@@ -473,7 +474,7 @@ def draw_title_sidebar(img, pos, score):
     draw_string_to_image(score_str, img, (draw_x, y), WHITE, 'op')
     y += 30
     img.paste(title_downvote_img, (x, y), title_downvote_img)
-    return False
+    return (x, y)
 
 def draw_title_footer(img, pos, num_comments):
     x, y = pos
@@ -543,7 +544,7 @@ def create_final_video(post):
         f.write('file \'' + title_card_file_name + '\'\n')
         for file_name in file_names[:-1]:
             f.write('file \'' + file_name + '\'\n')
-            f.write('file \'../res/' + static_video_name + '\'\n')
+#            f.write('file \'../res/' + static_video_name + '\'\n')
         f.write('file \'' + file_names[-1] + '\'\n')
 
 
