@@ -68,7 +68,7 @@ indent_off  = 50
 header_off  = 50
 sidebar_off = 50, 50
 
-title_sidebar_off = 80, 80
+title_sidebar_off = 110, 80
 
 vote_img_pad = 100
 comment_end_pad = footer_img.height + 100
@@ -216,13 +216,15 @@ def draw_header(img, pos, username, npoints, created_utc, is_submitter, awards):
     x += 10
 
     if is_submitter:
-        (x, y) = draw_string_to_image('OP', img, (x, y), RED, 'op')
+        x += 10
+        (x, y) = draw_string_to_image('OP', img, (x, y + 5), RED, 'op')
+        y -= 5
         x += 10
 
     # write the points and time duration after the username 
-    string = ' •   ' + prettify_num(npoints) + 'points   •   ' + time_ago_str(created_utc)
+    string = ' •   ' + prettify_num(npoints) + ' points   •   ' + time_ago_str(created_utc)
     (x, y) = draw_string_to_image(string, img, (x, y), WHITE, 'header')
-    x += 10
+    x += 30
 
     # paste the medals
     draw_awards(img, (x, y), awards)
@@ -495,7 +497,7 @@ def create_title_frame(post):
     y -= 15
     draw_title_sidebar(img, (x, y), post['score'])
     (x, y) = write_sentence(post['title'], img, (x, y), width_box, spacing, WHITE, 'title')
-    (x, y) = (text_start_x, y + 100)
+    (x, y) = (title_start_x, y + 100)
     draw_title_footer(img, (x, y), post['num_comments'])
     return np.array(img)
 
@@ -567,7 +569,7 @@ if __name__ == '__main__':
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
 
-    create_title_video(posts[0])
+    #create_title_video(posts[0])
     
     # uncomment to test create_comment_chain_video with
     # a long video that should take roughly 3:14 seconds to generate
@@ -578,11 +580,11 @@ if __name__ == '__main__':
     # uncomment to test create_final_video 
     # with a short video with two comment chains
     #
-    #posts[0]['comments'] = posts[0]['comments'][:2]
-    #posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
-    #for comment in posts[0]['comments']:
-    #    for reply in comment['replies']:
-    #        reply['replies'] = []
-    #create_final_video(posts[0])
+    posts[0]['comments'] = posts[0]['comments'][:2]
+    posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
+    for comment in posts[0]['comments']:
+        for reply in comment['replies']:
+            reply['replies'] = []
+    create_final_video(posts[0])
 
 
