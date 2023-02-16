@@ -16,12 +16,13 @@ from pydub import AudioSegment
 import cv2
 import subprocess
 
+from better_profanity.better_profanity import profanity
+
 from load_posts import save_top_posts_and_best_comments
-from text_clean import clean_comment_bodies, get_paragraphs, get_sentences, replace_acronyms, censor_curse_words
+from text_clean import clean_comment_bodies, get_paragraphs, get_sentences, replace_acronyms, censor_curse_words, first_diff_index
 
 from util import *
 from text_render import *
-
 
 
 # Fonts 
@@ -104,6 +105,44 @@ def create_audio_file(text, file_name):
     duration = audio.duration_seconds
     del audio
     return duration
+
+def create_censored_audio_file(sentence, file_name):
+    if not profanity.contains_profanity(sentence):
+    #if True:
+        return create_audio_file(sentence, file_name)
+    censored = profanity.censor(sentence, "*")
+
+    assert(len(sentence) == len(censored))
+    print(f"Uncensored: {sentence}")
+    print(f"Censored: {censored}")
+    print(f"first-diff-idx: {first_diff_index(sentence, censored)}")
+    print(f"first-diff-idx: {first_diff_index(censored, sentence)}")
+
+    clean_text, dirty_text = '', ''
+    start_clean, end_clean = 0, 0
+    start_dirty, end_dirty = 0, 0
+    diff_idx = -1
+    while True:
+        diff_idx = first_diff_index(sentence[start_clean:], censored[start_clean:])
+        if diff_idx == -1:
+            break;
+
+        end_clean = diff_idx - 1
+        start_dirty = end_clean
+        end_dirty = diff_idx
+        while censored[end_dirty] == "*":
+            end_dirty += 1
+
+        clean_text = sentence[start_clean : end_clean]
+        dirty_text = sentence[start_dirty : end_dirty]
+        print(f"Clean: {clean_text}")
+        print(f"dirty: {dirty_text}")
+
+        start_clean = end_dirty + 1
+
+    print(f"Remaining: {sentence[start_clean:]}")
+
+    return False
 
 def create_comment_audio(comment_body):
     durations, audio_file_names, n = [], [], 1
@@ -544,21 +583,16 @@ def create_final_video(post):
         f.write('file \'' + title_card_file_name + '\'\n')
         for file_name in file_names[:-1]:
             f.write('file \'' + file_name + '\'\n')
-#            f.write('file \'../res/' + static_video_name + '\'\n')
+            f.write('file \'../res/' + static_video_name + '\'\n')
         f.write('file \'' + file_names[-1] + '\'\n')
 
 
     LOG('CREATING FINAL VIDEO...', '')
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-                    -y {final_video_name}", 
+                    -y -copytb 1 {final_video_name}", 
                    shell=True, timeout=120)
     #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-    #                -crf 20 -preset veryfast \
-    #                -y {final_video_name}", 
-    #               shell=True, timeout=120)
-    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} \
-    #               -c:v libx264 -crf 20 -preset veryfast \
-    #               -y {final_video_name}", 
+    #                -y {final_video_name} > /dev/null 2>&1", 
     #               shell=True, timeout=120)
     LOG('FINAL VIDEO CREATED', '')
 
@@ -569,6 +603,8 @@ if __name__ == '__main__':
         posts = json.load(posts_file)
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
+
+    create_censored_audio_file("This is a fucking example sentence.", "test_audio.mp3")
 
     #create_title_video(posts[0])
     
@@ -581,11 +617,11 @@ if __name__ == '__main__':
     # uncomment to test create_final_video 
     # with a short video with two comment chains
     #
-    posts[0]['comments'] = posts[0]['comments'][:2]
-    posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
-    for comment in posts[0]['comments']:
-        for reply in comment['replies']:
-            reply['replies'] = []
-    create_final_video(posts[0])
+    #posts[0]['comments'] = posts[0]['comments'][:2]
+    #posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
+    #for comment in posts[0]['comments']:
+    #    for reply in comment['replies']:
+    #        reply['replies'] = []
+    #create_final_video(posts[0])
 
 
