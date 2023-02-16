@@ -78,7 +78,8 @@ comment_end_pad = footer_img.height + 100
 
 # Project Structure
 working_dir = 'build-vid/'
-temp_dir    = working_dir + 'tmp/'
+temp_dir_audio    = working_dir + 'audio/'
+temp_dir_video    = working_dir + 'video/'
 
 title_audio_name     = 'title.mp3'
 na_title_video_name  = 'na_title_card.mp4'
@@ -97,10 +98,10 @@ comment_n = 0
 chain_n = 0
 
 def create_audio_file(text, file_name):
-    path = os.path.join(temp_dir, file_name)
+    path = os.path.join(temp_dir_audio, file_name)
     text = replace_acronyms(text)
     tts = gTTS(text=text, lang='en')
-    tts.save(os.path.join(temp_dir, file_name))
+    tts.save(os.path.join(temp_dir_audio, file_name))
     audio = AudioSegment.from_file(path, format='mp3')
     duration = audio.duration_seconds
     del audio
@@ -149,13 +150,13 @@ def create_comment_audio(comment_body):
     for paragraph in get_paragraphs(comment_body):
         for sentence in get_sentences(paragraph):
             file_name = 'audio' + str(n) + '.mp3'
-            audio_file_names.append(os.path.join(temp_dir, file_name))
+            audio_file_names.append(os.path.join(temp_dir_audio, file_name))
             durations.append(create_audio_file(sentence, file_name))
             n += 1
     audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
     for file_name in audio_file_names[1:]:
         audio += AudioSegment.from_file(file_name, format='mp3')
-    audio.export(os.path.join(temp_dir, audio_name))
+    audio.export(os.path.join(temp_dir_audio, audio_name))
     return durations
 
 def prettify_num(n):
@@ -372,7 +373,7 @@ def create_comment_video(comment, img, pos, pane_y):
 
     LOG('WRITING VIDEO', sec_2_vid_duration(sum(durations)))
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out    = cv2.VideoWriter(os.path.join(temp_dir, na_video_name), fourcc, fps, (screen_width, screen_height))
+    out    = cv2.VideoWriter(os.path.join(temp_dir_video, na_video_name), fourcc, fps, (screen_width, screen_height))
     for frame, duration in list(zip(frames, durations)):
         cv2_frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
         for _ in range(int(fps * duration)):
@@ -382,8 +383,8 @@ def create_comment_video(comment, img, pos, pane_y):
 
     global comment_n
     out_file_name = comment_video_name_base + str(comment_n) + '.mp4'
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_video_name} -i {temp_dir}{audio_name} \
-                    -c copy -map 0:v:0 -map 1:a:0 -y ./{working_dir}{out_file_name} > /dev/null 2>&1", 
+    subprocess.run(f"ffmpeg -i {temp_dir_video}{na_video_name} -i {temp_dir_audio}{audio_name} \
+                    -c copy -map 0:v:0 -map 1:a:0 -y ./{temp_dir_video}{out_file_name} > /dev/null 2>&1", 
                    shell=True, timeout=300)
     LOG('VIDEO CREATED', out_file_name)
     comment_n += 1
@@ -441,12 +442,15 @@ def create_comment_chain_video(comment):
 
     with open(file_names_txt_file, 'w') as f:
         for file_name in file_names:
-            f.write('file \'' + file_name + '\'\n')
+            f.write('file \'video/' + file_name + '\'\n')
 
     global chain_n
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
+    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
+    #                -y ./{temp_dir_video}{out_file_name} > /dev/null 2>&1", 
+    #               shell=True, timeout=120)
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-                    -y ./{working_dir}{out_file_name} > /dev/null 2>&1", 
+                    -y ./{temp_dir_video}{out_file_name}", 
                    shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
     chain_n += 1
@@ -551,14 +555,14 @@ def create_title_video(post):
     duration = create_audio_file(post['title'], title_audio_name)
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out    = cv2.VideoWriter(os.path.join(temp_dir, na_title_video_name), fourcc, fps, (screen_width, screen_height))
+    out    = cv2.VideoWriter(os.path.join(temp_dir_video, na_title_video_name), fourcc, fps, (screen_width, screen_height))
     frame  = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
     for _ in range(int(fps * duration)):
         out.write(frame)
     out.release()
     cv2.destroyAllWindows()
-    subprocess.run(f"ffmpeg -i {temp_dir}{na_title_video_name} -i {temp_dir}{title_audio_name} \
-            -c copy -map 0:v:0 -map 1:a:0 -y ./{working_dir}{out_file_name} > /dev/null 2>&1", 
+    subprocess.run(f"ffmpeg -i {temp_dir_video}{na_title_video_name} -i {temp_dir_audio}{title_audio_name} \
+            -c copy -map 0:v:0 -map 1:a:0 -y ./{temp_dir_video}{out_file_name} > /dev/null 2>&1", 
             shell=True, timeout=300)
     LOG('VIDEO CREATED', out_file_name)
     return out_file_name
@@ -580,11 +584,11 @@ def create_final_video(post):
 
     # join together chain videos with 'static video' in between, with title-card first
     with open(file_names_txt_file, 'w') as f:
-        f.write('file \'' + title_card_file_name + '\'\n')
+        f.write('file \'video/' + title_card_file_name + '\'\n')
         for file_name in file_names[:-1]:
-            f.write('file \'' + file_name + '\'\n')
+            f.write('file \'video/' + file_name + '\'\n')
             f.write('file \'../res/' + static_video_name + '\'\n')
-        f.write('file \'' + file_names[-1] + '\'\n')
+        f.write('file \'video/' + file_names[-1] + '\'\n')
 
 
     LOG('CREATING FINAL VIDEO...', '')
@@ -604,8 +608,6 @@ if __name__ == '__main__':
     for comment in posts[0]['comments']:
         clean_comment_bodies(comment)
 
-    create_censored_audio_file("This is a fucking example sentence.", "test_audio.mp3")
-
     #create_title_video(posts[0])
     
     # uncomment to test create_comment_chain_video with
@@ -617,11 +619,13 @@ if __name__ == '__main__':
     # uncomment to test create_final_video 
     # with a short video with two comment chains
     #
-    #posts[0]['comments'] = posts[0]['comments'][:2]
-    #posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
-    #for comment in posts[0]['comments']:
-    #    for reply in comment['replies']:
-    #        reply['replies'] = []
-    #create_final_video(posts[0])
+    posts[0]['comments'] = posts[0]['comments'][:2]
+    posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
+    for comment in posts[0]['comments']:
+        for reply in comment['replies']:
+            reply['replies'] = []
+    create_final_video(posts[0])
+
+    #create_censored_audio_file("This is a fucking example sentence.", "test_audio.mp3")
 
 
