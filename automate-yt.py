@@ -107,15 +107,24 @@ def create_audio_file(text, file_name):
     del audio
     return duration
 
+# bette_profanity is bugged i am near certain
+dont_censor_these_phrases = [ "isn't it?" ]
+
 def create_censored_audio_file(sentence, file_name):
     if not profanity.contains_profanity(sentence):
-    #if True:
         return create_audio_file(sentence, file_name)
+
+    if sentence in dont_censor_these_phrases:
+        return create_audio_file(sentence, file_name)
+
+    log_phrase = sentence[:48] + '...' if len(sentence) > 48 else sentence
+    LOG('CENSORING PHRASE', log_phrase)
+
+
     censored = profanity.censor(sentence, "*")
 
-    assert(len(sentence) == len(censored))
-    print(f"Uncensored: {sentence}")
-    print(f"Censored: {censored}")
+    LOG('UNCENSORED', str(sentence))
+    LOG('CENSORED', str(censored))
     print(f"first-diff-idx: {first_diff_index(sentence, censored)}")
     print(f"first-diff-idx: {first_diff_index(censored, sentence)}")
 
@@ -123,9 +132,16 @@ def create_censored_audio_file(sentence, file_name):
     start_clean, end_clean = 0, 0
     start_dirty, end_dirty = 0, 0
     diff_idx = -1
+
+    beep_audio = AudioSegment.from_file(os.path.join('res/', 'beep.mp3'))
+    beep_duration = 0
+    audio = AudioSegment.empty()
+
     while True:
         diff_idx = first_diff_index(sentence[start_clean:], censored[start_clean:])
-        if diff_idx == -1:
+        if diff_idx == -1: # Occurs when there is no more swear words in the sentence
+            break;
+        if censored[diff_idx] != "*": # something went wrong (probably with better-profanity
             break;
 
         end_clean = diff_idx - 1
@@ -135,15 +151,26 @@ def create_censored_audio_file(sentence, file_name):
             end_dirty += 1
 
         clean_text = sentence[start_clean : end_clean]
-        dirty_text = sentence[start_dirty : end_dirty]
-        print(f"Clean: {clean_text}")
-        print(f"dirty: {dirty_text}")
+        if bool(re.search(r'\S', clean_text)):
+            create_audio_file(clean_text, 'clean.mp3')
+            audio += AudioSegment.from_file(os.path.join(temp_dir_audio, 'clean.mp3'))
 
+        dirty_text = sentence[start_dirty : end_dirty]
+        if bool(re.search(r'\S', dirty_text)):
+            create_audio_file(dirty_text, 'dirty.mp3')
+            dirty_audio = AudioSegment.from_file(os.path.join(temp_dir_audio, 'dirty.mp3'))
+            beep_duration = dirty_audio.duration_seconds
+
+        if beep_duration > 0:
+            audio += beep_audio[:beep_duration * 1000]
+        beep_duration = 0
         start_clean = end_dirty + 1
 
-    print(f"Remaining: {sentence[start_clean:]}")
-
-    return False
+    create_audio_file(sentence[start_clean:], 'clean.mp3')
+    audio += AudioSegment.from_file(os.path.join(temp_dir_audio, 'clean.mp3'))
+    duration = audio.duration_seconds
+    audio.export(os.path.join(temp_dir_audio, file_name))
+    return duration
 
 def create_comment_audio(comment_body):
     durations, audio_file_names, n = [], [], 1
@@ -151,7 +178,8 @@ def create_comment_audio(comment_body):
         for sentence in get_sentences(paragraph):
             file_name = 'audio' + str(n) + '.mp3'
             audio_file_names.append(os.path.join(temp_dir_audio, file_name))
-            durations.append(create_audio_file(sentence, file_name))
+#            durations.append(create_audio_file(sentence, file_name))
+            durations.append(create_censored_audio_file(sentence, file_name))
             n += 1
     audio = AudioSegment.from_file(audio_file_names[0], format='mp3')
     for file_name in audio_file_names[1:]:
@@ -446,12 +474,12 @@ def create_comment_chain_video(comment):
 
     global chain_n
     out_file_name = chain_video_name_base + str(chain_n) + '.mp4'
-    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-    #                -y ./{temp_dir_video}{out_file_name} > /dev/null 2>&1", 
-    #               shell=True, timeout=120)
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-                    -y ./{temp_dir_video}{out_file_name}", 
+                    -y ./{temp_dir_video}{out_file_name} > /dev/null 2>&1", 
                    shell=True, timeout=120)
+    #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
+    #                -y ./{temp_dir_video}{out_file_name}", 
+    #               shell=True, timeout=120)
     LOG('VIDEO CREATED', out_file_name)
     chain_n += 1
 
@@ -587,7 +615,7 @@ def create_final_video(post):
         f.write('file \'video/' + title_card_file_name + '\'\n')
         for file_name in file_names[:-1]:
             f.write('file \'video/' + file_name + '\'\n')
-            f.write('file \'../res/' + static_video_name + '\'\n')
+#            f.write('file \'../res/' + static_video_name + '\'\n')
         f.write('file \'video/' + file_names[-1] + '\'\n')
 
 
@@ -619,13 +647,29 @@ if __name__ == '__main__':
     # uncomment to test create_final_video 
     # with a short video with two comment chains
     #
-    posts[0]['comments'] = posts[0]['comments'][:2]
-    posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
-    for comment in posts[0]['comments']:
-        for reply in comment['replies']:
-            reply['replies'] = []
-    create_final_video(posts[0])
+    #posts[0]['comments'] = posts[0]['comments'][:2]
+    #posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
+    #for comment in posts[0]['comments']:
+    #    for reply in comment['replies']:
+    #        reply['replies'] = []
+    #create_final_video(posts[0])
 
-    #create_censored_audio_file("This is a fucking example sentence.", "test_audio.mp3")
+    create_censored_audio_file("This is a fucking example sentence.", "test_audio.mp3")
+    print('\n\n')
+    create_censored_audio_file("fucking example.", "test_audio.mp3")
+    print('\n\n')
+    create_censored_audio_file("this example.", "test_audio.mp3")
+    print('\n\n')
+    create_censored_audio_file("isn't it?", "test_audio.mp3")
+    print('\n\n')
+    create_censored_audio_file("isn't it!", "test_audio.mp3")
+    print('\n\n')
+    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler word", "test_audio.mp3")
+    print('\n\n')
+    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler", "test_audio.mp3")
+    print('\n\n')
+    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch", "test_audio.mp3")
+    print('\n\n')
+
 
 

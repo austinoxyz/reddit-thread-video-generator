@@ -1,0 +1,19 @@
+{
+  "configurations": {
+    "<name>: Launch": {
+      "adapter": "debugpy",
+      "filetypes": [ "python" ],
+      "configuration": {
+        "name": "Launch",
+        "type": "python",
+        "request": "launch",
+        "cwd": "/home/anon/Code/automate-yt",
+        "python": "/usr/bin/python3",
+        "stopOnEntry": true,
+        "console": "externalTerminal",
+        "debugOptions": [],
+        "program": "./automate-yt.py"
+      }
+    }
+  }
+}
