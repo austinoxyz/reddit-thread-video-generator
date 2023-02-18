@@ -118,7 +118,8 @@ def create_censored_audio_file(sentence, file_name):
         return create_audio_file(sentence, file_name)
 
     log_phrase = sentence[:48] + '...' if len(sentence) > 48 else sentence
-    LOG('CENSORING PHRASE', log_phrase)
+    print(' '.join([c for c in log_phrase]))
+    print(' '.join([str(i) for i in range(0, len(log_phrase))]))
 
 
     censored = profanity.censor(sentence, "*")
@@ -132,6 +133,7 @@ def create_censored_audio_file(sentence, file_name):
     start_clean, end_clean = 0, 0
     start_dirty, end_dirty = 0, 0
     diff_idx = -1
+    iteration = 0
 
     beep_audio = AudioSegment.from_file(os.path.join('res/', 'beep.mp3'))
     beep_duration = 0
@@ -139,6 +141,12 @@ def create_censored_audio_file(sentence, file_name):
 
     while True:
         diff_idx = first_diff_index(sentence[start_clean:], censored[start_clean:])
+
+        print('\n')
+        print(f"iteration: {iteration}\n")
+        print(f"--------------\n")
+        print(f"diff-dx: {diff_idx}\n")
+
         if diff_idx == -1: # Occurs when there is no more swear words in the sentence
             break;
         if censored[diff_idx] != "*": # something went wrong (probably with better-profanity
@@ -149,6 +157,11 @@ def create_censored_audio_file(sentence, file_name):
         end_dirty = diff_idx
         while censored[end_dirty] == "*":
             end_dirty += 1
+
+        print(f"start_clean: {start_clean}\n")
+        print(f"end_clean: {end_clean}\n")
+        print(f"start_dirty: {start_dirty}\n")
+        print(f"end_dirty: {end_dirty}\n")
 
         clean_text = sentence[start_clean : end_clean]
         if bool(re.search(r'\S', clean_text)):
@@ -166,6 +179,7 @@ def create_censored_audio_file(sentence, file_name):
         beep_duration = 0
         start_clean = end_dirty + 1
 
+    print(f"END.\nREMAINING {sentence[start_clean:]}\n")
     create_audio_file(sentence[start_clean:], 'clean.mp3')
     audio += AudioSegment.from_file(os.path.join(temp_dir_audio, 'clean.mp3'))
     duration = audio.duration_seconds
@@ -664,12 +678,12 @@ if __name__ == '__main__':
     print('\n\n')
     create_censored_audio_file("isn't it!", "test_audio.mp3")
     print('\n\n')
-    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler word", "test_audio.mp3")
-    print('\n\n')
-    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler", "test_audio.mp3")
-    print('\n\n')
-    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch", "test_audio.mp3")
-    print('\n\n')
+#    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler word", "test_audio.mp3")
+#    print('\n\n')
+#    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler", "test_audio.mp3")
+#    print('\n\n')
+#    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch", "test_audio.mp3")
+#    print('\n\n')
 
 
 
