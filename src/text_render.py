@@ -183,8 +183,6 @@ def write_sentence(text, img, pos, width_box, spacing, color, fontname):
     draw_debug_line_y(img, y, GREEN)
     return (x, y)
 
-
-
 def write_paragraph(paragraph, img, pos, pane_y, width_box, spacing, color, fontname):
     x, y  = pos
     start_x, end_x = width_box

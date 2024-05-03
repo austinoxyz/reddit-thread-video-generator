@@ -24,12 +24,12 @@ acronym_map = {
     'YTA': 'you\'re the asshole',
     'NTA': 'not the asshole',
     'AH': 'asshole',
-    'BIL': 'brother in law', 'BiL': 'brother in law', 
-    'SIL': 'sister in law', 'SiL': 'sister in law', 
-    'FIL': 'father in law', 'FiL': 'father in law', 
-    'MIL': 'mother in law', 'MiL': 'mother in law', 
-    'DIL': 'daughter in law', 'DiL': 'daughter in law', 
-    'AIL': 'aunt in law', 'AiL': 'aunt in law', 
+    'BIL': 'brother in law',      'BiL': 'brother in law', 
+    'SIL': 'sister in law',       'SiL': 'sister in law', 
+    'FIL': 'father in law',       'FiL': 'father in law', 
+    'MIL': 'mother in law',       'MiL': 'mother in law', 
+    'DIL': 'daughter in law',     'DiL': 'daughter in law', 
+    'AIL': 'aunt in law', 'AiL':  'aunt in law', 
     'UIL': 'uncle in law', 'UiL': 'uncle in law', 
 }
 

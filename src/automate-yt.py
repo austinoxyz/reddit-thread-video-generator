@@ -18,10 +18,9 @@ import subprocess
 
 from better_profanity.better_profanity import profanity
 
+from util import *
 from load_posts import save_top_posts_and_best_comments
 from text_clean import clean_comment_bodies, get_paragraphs, get_sentences, replace_acronyms, censor_curse_words, first_diff_index
-
-from util import *
 from text_render import *
 
 
@@ -336,7 +335,7 @@ def draw_footer(img, pos):
 def write_comment(comment, img, pos, pane_y):
     x, y = pos
     width_box = (x, text_width_cutoff)
-    spacing = int((get_font('comment').height >> 6)* 1.2)
+    spacing = int((get_font('comment').height >> 6) * 1.2)
     color = (255, 255, 255, 1)
     frames = []
     text = censor_curse_words(comment['body'])
@@ -635,7 +634,7 @@ def create_final_video(post):
 
     LOG('CREATING FINAL VIDEO...', '')
     subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
-                    -y -copytb 1 {final_video_name}", 
+                    -y -copytb 1 {final_video_name} > /dev/null 2>&1", 
                    shell=True, timeout=120)
     #subprocess.run(f"ffmpeg -f concat -safe 0 -i {file_names_txt_file} -c copy \
     #                -y {final_video_name} > /dev/null 2>&1", 
@@ -661,23 +660,23 @@ if __name__ == '__main__':
     # uncomment to test create_final_video 
     # with a short video with two comment chains
     #
-    #posts[0]['comments'] = posts[0]['comments'][:2]
-    #posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
-    #for comment in posts[0]['comments']:
-    #    for reply in comment['replies']:
-    #        reply['replies'] = []
-    #create_final_video(posts[0])
+    posts[0]['comments'] = posts[0]['comments'][:2]
+    posts[0]['comments'][1]['replies'] = posts[0]['comments'][1]['replies'][:3] 
+    for comment in posts[0]['comments']:
+        for reply in comment['replies']:
+            reply['replies'] = []
+    create_final_video(posts[0])
 
-    create_censored_audio_file("This is a fucking example sentence.", "test_audio.mp3")
-    print('\n\n')
-    create_censored_audio_file("fucking example.", "test_audio.mp3")
-    print('\n\n')
-    create_censored_audio_file("this example.", "test_audio.mp3")
-    print('\n\n')
-    create_censored_audio_file("isn't it?", "test_audio.mp3")
-    print('\n\n')
-    create_censored_audio_file("isn't it!", "test_audio.mp3")
-    print('\n\n')
+#    create_censored_audio_file("This is a fucking example sentence.", "test_audio.mp3")
+#    print('\n\n')
+#    create_censored_audio_file("fucking example.", "test_audio.mp3")
+#    print('\n\n')
+#    create_censored_audio_file("this example.", "test_audio.mp3")
+#    print('\n\n')
+#    create_censored_audio_file("isn't it?", "test_audio.mp3")
+#    print('\n\n')
+#    create_censored_audio_file("isn't it!", "test_audio.mp3")
+#    print('\n\n')
 #    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler word", "test_audio.mp3")
 #    print('\n\n')
 #    create_censored_audio_file("This bitch is a fucking example sentece filler word filler word bitch filler", "test_audio.mp3")
