@@ -1,8 +1,9 @@
 build-vid/
 res/
 data/
+generate/
+
 src/__pycache__/
-data/
 
 final.mp4
 .vimspector.json
